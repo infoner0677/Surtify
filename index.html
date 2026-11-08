@@ -252,7 +252,7 @@ function repCSV(r){
 async function vReporte(){
   const sedes=adm?sucs:[];
   $('#body').innerHTML=`<div class="card"><h2>Reporte para el contador</h2>
-   <div class="tabs">${[['hoy','Hoy'],['ayer','Ayer'],['mes','Este mes'],['mesant','Mes anterior']].map(p=>`<button data-p="${p[0]}" class="${repPer===p[0]?'on':''}">${p[1]}</button>`).join('')}</div>
+   <div class="tabs" style="flex-wrap:wrap">${[['hoy','Hoy'],['ayer','Ayer'],['mes','Este mes'],['mesant','Mes anterior']].map(p=>`<button data-p="${p[0]}" class="${repPer===p[0]?'on':''}">${p[1]}</button>`).join('')}</div>
    ${adm?`<select id="rs"><option value="">Todas las sedes</option>${sedes.map(x=>`<option value="${x.id_sucursal}" ${String(x.id_sucursal)===repSuc?'selected':''}>${esc(x.nombre_sucursal)}</option>`).join('')}</select>`:''}
    <div id="rb"><span class="mu">Calculando…</span></div></div>`;
   $('#body').querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{repPer=b.dataset.p;vReporte()});
