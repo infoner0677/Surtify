@@ -199,6 +199,16 @@ function recibo(v,cn){
   m.querySelector('button').onclick=()=>m.remove();
 }
 
+const fechaLarga=x=>new Date(x).toLocaleString('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+function waFactura(x,f,tel){ // comprobante de venta para enviar al cliente por WhatsApp (sin tel: WhatsApp deja elegir el contacto)
+  const L=[`*${perfil.nombre_comercial}*`,`Comprobante de venta ${x.numero_factura}`,fechaLarga(x.fecha_emision)+' · '+f.sucursal,''];
+  x.lineas.forEach(l=>L.push(`${l.vendida} × ${l.nombre} — ${cop(l.vendida*l.precio)}`));
+  L.push('',`*Total: ${cop(x.total)}* (IVA incluido)`,`Pago: ${x.metodo_pago}`);
+  if(Number(f.devuelto)>0)L.push(`Devuelto: ${cop(f.devuelto)}`);
+  L.push('','¡Gracias por tu compra!');
+  return 'https://wa.me/'+(tel||'')+'?text='+encodeURIComponent(L.join('\n'));
+}
+
 /* ---------- Facturas (cajero: Mis ventas · administrador: todas las sedes) ---------- */
 async function vFacturas(){
   if(adm&&!sucs.length){const {data}=await db.from('sucursales').select('id_sucursal,nombre_sucursal').order('id_sucursal');sucs=data||[]}
@@ -229,8 +239,13 @@ async function vFacturas(){
       const x=r.data;const m=modal(`<h2>${esc(x.numero_factura)}</h2><p class="mu">${hora(x.fecha_emision)} · ${esc(x.metodo_pago)}${f.cliente?' · '+esc(f.cliente):''}${adm?' · '+esc(f.sucursal)+' · '+esc(f.cajero||'—'):''}</p>`+
        x.lineas.map(l=>`<div class="line"><span class="sp">${esc(l.nombre)}<div class="mu">${l.vendida} × ${cop(l.precio)}${l.devuelta?' · devueltas '+l.devuelta:''}</div></span>${cop(l.vendida*l.precio)}</div>`).join('')+
        `<div class="line"><span class="sp"><b>Total</b></span><b>${cop(x.total)}</b></div>${Number(f.devuelto)>0?`<div class="line"><span class="sp">Devuelto</span>${cop(f.devuelto)}</div>`:''}
-        <button class="g" id="fx" style="width:100%;margin-top:8px">Cerrar</button>`);
-      m.querySelector('#fx').onclick=()=>m.remove()});
+        <input id="ft" type="tel" inputmode="tel" placeholder="WhatsApp del cliente (opcional)" style="margin-top:10px">
+        <button id="fw" style="width:100%">Enviar por WhatsApp</button>
+        <button class="g" id="fx" style="width:100%;margin-top:6px">Cerrar</button>`);
+      m.querySelector('#fx').onclick=()=>m.remove();
+      m.querySelector('#fw').onclick=()=>{const t=waTel(m.querySelector('#ft').value);
+        if(t&&(t.length<11||t.length>15)){toast('Revisa el número de WhatsApp',true);return}
+        window.open(waFactura(x,f,t),'_blank','noopener')}});
   };
   draw();
   $('#fq').oninput=e=>{facQ=e.target.value;draw()};
