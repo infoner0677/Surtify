@@ -62,7 +62,7 @@ function login(){
   const go=async()=>{
     const {error}=await db.auth.signInWithPassword({email:$('#em').value.trim(),password:$('#pw').value});
     error?toast('Correo o contraseña incorrectos',true):boot()};
-  $('#go').onclick=go;$('#pw').onkeydown=e=>e.key==='Enter'&&go();
+  $('#go').onclick=go;$('#pw').onkeydown=e=>{if(e.key==='Enter')go()};
 }
 
 async function boot(){
