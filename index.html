@@ -53,6 +53,7 @@ const $=s=>document.querySelector(s), app=$('#app');
 const cop=n=>new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0}).format(n||0);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const hora=x=>x?new Date(x).toLocaleString('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'—';
+const pl=(n,w)=>`${n||0} ${w}${Number(n)===1?'':'s'}`;
 const ddmm=f=>String(f).slice(8,10)+'/'+String(f).slice(5,7);
 let db,perfil,caja,adm=false,prods=[],cart=new Map(),tab='vender',q='',busy=false;
 let dias=7,invData=[],cats=[],sucs=[],invAlertas=0,invQ='',invSuc='',invSolo=false;
@@ -94,7 +95,7 @@ async function boot(){
   if(!p.data){app.innerHTML='<div class="card"><h2>Usuario sin empleado</h2><p>Tu cuenta no está vinculada a un empleado activo.</p><button class="g" id="lo">Salir</button></div>';$('#lo').onclick=logout;return}
   perfil=p.data;adm=!!perfil.es_administrador;tab=adm?'panel':'vender';await refresh();
 }
-async function logout(){await db.auth.signOut();cart.clear();caja=null;perfil=null;login()}
+async function logout(){await db.auth.signOut();cart.clear();devSel=null;repR=null;caja=null;perfil=null;login()}
 async function refresh(){
   caja=(await call('resumen_caja')).data;
   if(caja){const {data,error}=await db.from('v_productos_pos').select('*').order('nombre');if(error)toast(error.message,true);prods=data||[]}
@@ -118,18 +119,18 @@ function bindOpen(){
 function render(){
   const h=head();
   if(!adm&&!caja){app.innerHTML=h+openCard();$('#lo').onclick=logout;bindOpen();return}
-  const tabs=adm?[['panel','Panel'],['inv','Inventario'+(invAlertas?` <span class="badge">${invAlertas}</span>`:'')],['vender','Vender'],['gasto','Gasto'],['cerrar','Cerrar caja']]
-                :[['vender','Vender'],['gasto','Gasto'],['cerrar','Cerrar caja']];
-  const deCaja=['vender','gasto','cerrar'].includes(tab);
+  const tabs=adm?[['panel','Panel'],['inv','Inventario'+(invAlertas?` <span class="badge">${invAlertas}</span>`:'')],['vender','Vender'],['devolver','Devolver'],['gasto','Gasto'],['reporte','Reporte'],['cerrar','Cerrar caja']]
+                :[['vender','Vender'],['devolver','Devolver'],['gasto','Gasto'],['reporte','Reporte'],['cerrar','Cerrar caja']];
+  const deCaja=['vender','devolver','gasto','cerrar'].includes(tab);
   app.innerHTML=h+(caja&&deCaja?`<div class="stats">
     <div><span class="mu">Efectivo esperado</span><b>${cop(caja.monto_cierre_esperado)}</b></div>
-    <div><span class="mu">Ventas (${caja.num_ventas})</span><b>${cop(caja.total_ventas)}</b></div>
+    <div><span class="mu">${caja.num_ventas===1?'Venta':'Ventas'} (${caja.num_ventas})</span><b>${cop(caja.total_ventas)}</b></div>
     <div><span class="mu">Gastos</span><b>${cop(caja.total_gastos)}</b></div></div>`:'')+
     `<div class="tabs">${tabs.map(t=>`<button data-t="${t[0]}" class="${tab===t[0]?'on':''}">${t[1]}</button>`).join('')}</div><div id="body"></div>`;
   $('#lo').onclick=logout;
   app.querySelectorAll('[data-t]').forEach(b=>{b.onclick=()=>{tab=b.dataset.t;render()}});
   if(deCaja&&!caja){$('#body').innerHTML=openCard();bindOpen();return}
-  ({panel:vPanel,inv:vInv,vender:vVender,gasto:vGasto,cerrar:vCerrar})[tab]();
+  ({panel:vPanel,inv:vInv,vender:vVender,devolver:vDevolver,gasto:vGasto,reporte:vReporte,cerrar:vCerrar})[tab]();
 }
 
 /* ---------- Vender ---------- */
@@ -183,6 +184,99 @@ function recibo(v){
    ${v.metodo_pago==='Efectivo'?`<div class="line"><span class="sp">Recibido</span>${cop(v.monto_recibido)}</div><div class="line"><span class="sp"><b>Cambio</b></span><b class="ok">${cop(v.cambio)}</b></div>`:`<div class="line"><span class="sp">Pago</span>${esc(v.metodo_pago)}</div>`}
    <button style="width:100%;margin-top:10px">Nueva venta</button>`);
   m.querySelector('button').onclick=()=>m.remove();
+}
+
+/* ---------- Devoluciones (nota crédito) ---------- */
+let devFacts=[],devSel=null,devQty={};
+async function vDevolver(){
+  $('#body').innerHTML=`<div class="card"><h2>Devolución</h2><p class="mu">Elige la factura. Se genera una nota crédito, el producto vuelve al inventario y el efectivo devuelto sale de tu caja.</p><div id="dv"><span class="mu">Cargando facturas…</span></div></div>`;
+  if(!devSel){
+    const {data,error}=await db.from('v_facturas_recientes').select('*').order('id_factura',{ascending:false}).limit(25);
+    if(error){toast(error.message,true);return}
+    devFacts=data||[];
+    $('#dv').innerHTML=devFacts.length?devFacts.map(f=>`<button class="g" data-f="${f.id_factura}" style="width:100%;text-align:left;margin-bottom:6px"><b>${esc(f.numero_factura)}</b> · ${cop(f.total_facturado)} · ${esc(f.metodo_pago)}<br><span class="mu">${hora(f.fecha_emision)} · ${esc(f.sucursal)}${Number(f.devuelto)>0?' · devuelto '+cop(f.devuelto):''}</span></button>`).join(''):'<span class="mu">Aún no hay facturas.</span>';
+    $('#dv').querySelectorAll('[data-f]').forEach(b=>b.onclick=async()=>{const r=await call('devolucion_disponible',{p_id_factura:Number(b.dataset.f)});if(r.data){devSel=r.data;devQty={};vDevolver()}});
+    return;
+  }
+  const d=devSel;
+  $('#dv').innerHTML=`<div class="line"><span class="sp"><b>${esc(d.numero_factura)}</b><div class="mu">${hora(d.fecha_emision)} · ${esc(d.metodo_pago)}</div></span>${cop(d.total)}</div>`+
+   d.lineas.map(l=>`<div class="line"><span class="sp">${esc(l.nombre)}<div class="mu">${cop(l.precio)} · vendidas ${l.vendida} · ya devueltas ${l.devuelta}</div></span>
+     <input type="number" min="0" max="${l.disponible}" value="0" data-p="${l.id_producto}" ${l.disponible?'':'disabled'} style="width:70px;margin:0"></div>`).join('')+
+   `<input id="dm" placeholder="Motivo (ej: producto en mal estado)" style="margin-top:10px"><div class="line"><span class="sp"><b>Total a devolver</b></span><b id="dt">${cop(0)}</b></div>
+    <button id="dr" style="width:100%">Registrar devolución</button><button class="g" id="dx" style="width:100%;margin-top:6px">Elegir otra factura</button>`;
+  const upd=()=>{let t=0;$('#dv').querySelectorAll('[data-p]').forEach(i=>{const l=d.lineas.find(x=>x.id_producto==i.dataset.p);let n=Math.max(0,Math.min(l.disponible,Math.floor(Number(i.value)||0)));devQty[l.id_producto]=n;t+=n*l.precio});$('#dt').textContent=cop(t)};
+  $('#dv').querySelectorAll('[data-p]').forEach(i=>i.oninput=upd);
+  $('#dx').onclick=()=>{devSel=null;vDevolver()};
+  $('#dr').onclick=async()=>{
+    upd();const items=Object.entries(devQty).filter(([,n])=>n>0).map(([id,n])=>({id_producto:Number(id),cantidad:n}));
+    if(!items.length){toast('Indica cuántas unidades devuelves',true);return}
+    const r=await call('registrar_devolucion',{p_id_factura:d.id_factura,p_items:items,p_motivo:$('#dm').value});
+    if(r.data){const n=r.data;devSel=null;await refresh();
+      const m=modal(`<h2>Devolución registrada</h2><p><b>${esc(n.numero_nota)}</b> · ${cop(n.total)}</p>
+        ${n.lineas.map(l=>`<div class="line"><span class="sp">${esc(l.nombre)} × ${l.cantidad}</span>${cop(l.total)}</div>`).join('')}
+        <p class="${n.efectivo_a_entregar>0?'wa':'mu'}"><b>${n.efectivo_a_entregar>0?'Entrega '+cop(n.efectivo_a_entregar)+' en efectivo al cliente':'Pago en '+esc(n.metodo_pago)+': no sale efectivo del cajón'}</b></p>
+        <p class="mu">El stock ya volvió al inventario.</p><button style="width:100%">Listo</button>`);
+      m.querySelector('button').onclick=()=>{m.remove();tab='devolver';render()}}};
+}
+
+/* ---------- Reporte para el contador ---------- */
+let repR=null,repPer='hoy',repSuc='';
+function bogota(d){return new Date(d.getTime()-5*3600e3).toISOString().slice(0,10)}
+function repRango(){
+  const hoy=new Date(),h=bogota(hoy);
+  if(repPer==='hoy')return [h,h];
+  if(repPer==='ayer'){const y=bogota(new Date(hoy.getTime()-864e5));return [y,y]}
+  if(repPer==='mes')return [h.slice(0,8)+'01',h];
+  const [a,m]=h.split('-').map(Number),p=new Date(Date.UTC(a,m-2,1)),f=new Date(Date.UTC(a,m-1,0));
+  return [p.toISOString().slice(0,10),f.toISOString().slice(0,10)];
+}
+function repTexto(r){
+  const L=[],f=r.facturas;
+  L.push(`*Resumen de ventas – ${r.comercio.nombre}*`);
+  if(r.comercio.nit)L.push(`NIT ${r.comercio.nit}`);
+  L.push(`Periodo: ${r.desde}${r.desde===r.hasta?'':' a '+r.hasta}${r.sucursal?' · '+r.sucursal:' · Todas las sedes'}`,'');
+  L.push(`Facturas: ${f.num}${f.primera?` (${f.primera} a ${f.ultima})`:''}`,`Base gravable: ${cop(f.subtotal)}`,`IVA: ${cop(f.iva)}`,`Total facturado: ${cop(f.total)}`);
+  (r.iva_por_tarifa||[]).forEach(t=>L.push(`  · IVA ${Number(t.tarifa)}%: base ${cop(t.base)} / IVA ${cop(t.iva)}`));
+  L.push(`Devoluciones (${r.devoluciones.num}): -${cop(r.devoluciones.total)}`,`*Ventas netas: ${cop(r.ventas_netas)}*`,'');
+  Object.entries(r.por_metodo||{}).forEach(([k,v])=>L.push(`${k}: ${cop(v)}`));
+  L.push(`Gastos de caja: ${cop(r.gastos)}`);
+  if((r.por_sucursal||[]).length>1){L.push('');r.por_sucursal.forEach(s=>L.push(`${s.nombre}: ${cop(s.total)} (${pl(s.num,'factura')})`))}
+  L.push('','_Generado con Surtify_');return L.join('\n');
+}
+function repCSV(r){
+  const c=v=>'"'+String(v??'').replace(/"/g,'""')+'"',rows=[['Tipo','Número','Fecha','Sucursal','Factura','Método/Motivo','Subtotal','IVA','Total','Estado DIAN']];
+  r.detalle_facturas.forEach(x=>rows.push(['Factura',x.numero,x.fecha,x.sucursal,'',x.metodo,x.subtotal,x.iva,x.total,x.estado_dian]));
+  r.detalle_notas.forEach(x=>rows.push(['Nota crédito',x.numero,x.fecha,x.sucursal,x.factura,x.motivo,'','',-x.total,'']));
+  return '﻿'+rows.map(a=>a.map(c).join(';')).join('\r\n');
+}
+async function vReporte(){
+  const sedes=adm?sucs:[];
+  $('#body').innerHTML=`<div class="card"><h2>Reporte para el contador</h2>
+   <div class="tabs">${[['hoy','Hoy'],['ayer','Ayer'],['mes','Este mes'],['mesant','Mes anterior']].map(p=>`<button data-p="${p[0]}" class="${repPer===p[0]?'on':''}">${p[1]}</button>`).join('')}</div>
+   ${adm?`<select id="rs"><option value="">Todas las sedes</option>${sedes.map(x=>`<option value="${x.id_sucursal}" ${String(x.id_sucursal)===repSuc?'selected':''}>${esc(x.nombre_sucursal)}</option>`).join('')}</select>`:''}
+   <div id="rb"><span class="mu">Calculando…</span></div></div>`;
+  $('#body').querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{repPer=b.dataset.p;vReporte()});
+  if(adm)$('#rs').onchange=e=>{repSuc=e.target.value;vReporte()};
+  if(adm&&!sucs.length){const {data}=await db.from('sucursales').select('id_sucursal,nombre_sucursal').order('id_sucursal');sucs=data||[];if(sucs.length)return vReporte()}
+  const [a,b]=repRango(),r=await call('reporte_contador',{p_desde:a,p_hasta:b,p_id_sucursal:adm&&repSuc?Number(repSuc):null});
+  if(!r.data){$('#rb').innerHTML='';return}
+  repR=r.data;const x=repR,f=x.facturas;
+  $('#rb').innerHTML=`<p class="mu">${esc(x.desde)}${x.desde===x.hasta?'':' a '+esc(x.hasta)} · ${esc(x.sucursal||'Todas las sedes')}</p>
+   <div class="line"><span class="sp">Facturas</span>${f.num}</div>
+   <div class="line"><span class="sp">Base gravable</span>${cop(f.subtotal)}</div>
+   <div class="line"><span class="sp">IVA</span>${cop(f.iva)}</div>
+   ${(x.iva_por_tarifa||[]).map(t=>`<div class="line mu"><span class="sp">IVA ${Number(t.tarifa)}%</span>base ${cop(t.base)} · iva ${cop(t.iva)}</div>`).join('')}
+   <div class="line"><span class="sp">Total facturado</span>${cop(f.total)}</div>
+   <div class="line"><span class="sp">Devoluciones (${x.devoluciones.num})</span>-${cop(x.devoluciones.total)}</div>
+   <div class="line"><span class="sp"><b>Ventas netas</b></span><b>${cop(x.ventas_netas)}</b></div>
+   ${Object.entries(x.por_metodo||{}).map(([k,v])=>`<div class="line mu"><span class="sp">${esc(k)}</span>${cop(v)}</div>`).join('')}
+   <div class="line"><span class="sp">Gastos de caja</span>${cop(x.gastos)}</div>
+   <button id="rw" style="width:100%;margin-top:10px">Compartir por WhatsApp</button>
+   <button class="g" id="rc" style="width:100%;margin-top:6px">Copiar resumen</button>
+   <button class="g" id="rv" style="width:100%;margin-top:6px">Descargar detalle (CSV)</button>`;
+  $('#rw').onclick=()=>window.open('https://wa.me/?text='+encodeURIComponent(repTexto(x)),'_blank','noopener');
+  $('#rc').onclick=async()=>{try{await navigator.clipboard.writeText(repTexto(x));toast('Resumen copiado')}catch(e){toast('No se pudo copiar',true)}};
+  $('#rv').onclick=()=>{const u=URL.createObjectURL(new Blob([repCSV(x)],{type:'text/csv;charset=utf-8'})),l=document.createElement('a');l.href=u;l.download=`surtify_${x.desde}_${x.hasta}.csv`;l.click();setTimeout(()=>URL.revokeObjectURL(u),2000)};
 }
 
 /* ---------- Gasto ---------- */
@@ -309,17 +403,17 @@ async function vPanel(){
   <div class="row" style="margin-bottom:12px"><h2 style="margin:0">Resumen del negocio</h2><span class="sp"></span>
     <div class="chips">${[7,14,30].map(d=>`<button class="${dias===d?'':'g'} s" data-d="${d}">${d} días</button>`).join('')}<button class="g s" id="rf">Actualizar</button></div></div>
   <div class="kpis">
-    <div><span class="mu">Ventas (${p.dias} días)</span><b>${cop(t.ventas)}</b><span class="mu">${t.num_ventas||0} ventas</span></div>
-    <div><span class="mu">Hoy</span><b>${cop(t.ventas_hoy)}</b><span class="mu">${t.num_ventas_hoy||0} ventas</span></div>
+    <div><span class="mu">Ventas (${p.dias} días)</span><b>${cop(t.ventas)}</b><span class="mu">${pl(t.num_ventas,'venta')}</span></div>
+    <div><span class="mu">Hoy</span><b>${cop(t.ventas_hoy)}</b><span class="mu">${pl(t.num_ventas_hoy,'venta')}</span></div>
     <div><span class="mu">Ticket promedio</span><b>${cop(t.ticket_promedio)}</b></div>
     <div><span class="mu">Gastos de caja</span><b>${cop(p.gastos)}</b></div>
     <div><span class="mu">Devoluciones</span><b>${cop(p.devoluciones)}</b></div></div>
   <div class="sucs">${(p.sucursales||[]).map(s=>`<div class="card"><h2>${esc(s.nombre)}</h2>
-    <div class="line"><span class="sp mu">Hoy</span><b>${cop(s.ventas_hoy)}</b><span class="mu">${s.num_ventas_hoy} ventas</span></div>
-    <div class="line"><span class="sp mu">Últimos ${p.dias} días</span><b>${cop(s.ventas_periodo)}</b><span class="mu">${s.num_ventas_periodo} ventas</span></div>
+    <div class="line"><span class="sp mu">Hoy</span><b>${cop(s.ventas_hoy)}</b><span class="mu">${pl(s.num_ventas_hoy,'venta')}</span></div>
+    <div class="line"><span class="sp mu">Últimos ${p.dias} días</span><b>${cop(s.ventas_periodo)}</b><span class="mu">${pl(s.num_ventas_periodo,'venta')}</span></div>
     <div style="padding:8px 0">${(s.cajas_abiertas||[]).length?s.cajas_abiertas.map(c=>`<div><span class="ok">● Caja abierta</span> · ${esc(c.empleado)}<div class="mu">Desde ${hora(c.desde)} · efectivo esperado ${cop(c.efectivo_esperado)}</div></div>`).join(''):'<span class="mu">○ Caja cerrada</span>'}</div>
     ${s.productos_en_alerta?`<button class="g s" data-al="${s.id_sucursal}">⚠ ${s.productos_en_alerta} producto${s.productos_en_alerta>1?'s':''} en alerta de stock</button>`:'<span class="ok">Inventario en orden</span>'}</div>`).join('')}</div>
-  <div class="card"><h2>Ventas por día</h2><div class="bars">${(p.ventas_por_dia||[]).map((d,i)=>`<div class="col" title="${esc(ddmm(d.fecha))}: ${esc(cop(d.total))} (${d.num} ventas)"><i style="height:${Math.round(Number(d.total)/maxD*120)}px"></i><small>${n>14&&i%5!==0?'':ddmm(d.fecha)}</small></div>`).join('')}</div></div>
+  <div class="card"><h2>Ventas por día</h2><div class="bars">${(p.ventas_por_dia||[]).map((d,i)=>`<div class="col" title="${esc(ddmm(d.fecha))}: ${esc(cop(d.total))} (${pl(d.num,'venta')})"><i style="height:${Math.round(Number(d.total)/maxD*120)}px"></i><small>${n>14&&i%5!==0?'':ddmm(d.fecha)}</small></div>`).join('')}</div></div>
   <div class="two"><div class="card"><h2>Ventas por método de pago</h2>${metodos.length?metodos.map(([k,v])=>`<div class="line"><span class="sp">${esc(k)}</span>${cop(v)}</div><div class="meter"><i style="width:${Math.round(v/totM*100)}%"></i></div>`).join(''):'<span class="mu">Sin ventas en el período</span>'}</div>
     <div class="card"><h2>Productos más vendidos</h2>${(p.top_productos||[]).length?p.top_productos.map(x=>`<div class="line"><span class="sp">${esc(x.producto)}<div class="mu">${x.unidades} und</div></span>${cop(x.total)}</div><div class="meter"><i style="width:${Math.round(x.total/maxP*100)}%"></i></div>`).join(''):'<span class="mu">Sin ventas en el período</span>'}</div></div>
   <div class="card ${(p.alertas_stock||[]).length?'alert':''}"><h2>Alertas de stock mínimo</h2>${(p.alertas_stock||[]).length?`<div class="t"><table><tr><th>Producto</th><th>Sede</th><th class="n">Stock</th><th class="n">Mín.</th></tr>${p.alertas_stock.map(a=>`<tr><td>${esc(a.producto)}</td><td>${esc(a.sucursal)}</td><td class="n"><b class="er">${a.stock}</b></td><td class="n">${a.stock_minimo}</td></tr>`).join('')}</table></div>`:'<span class="ok">Todo el inventario está sobre el mínimo.</span>'}</div>

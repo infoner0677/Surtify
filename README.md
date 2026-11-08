@@ -6,7 +6,7 @@
 - `database/`: esquema PostgreSQL, triggers, RLS y funciones para Supabase (ver `database/README.md`).
 
 ## Publicar
-1. Ejecuta en el SQL Editor de Supabase, en orden, `database/01_…` a `database/06_…` (o `surtify_supabase_completo.sql`, que ya incluye hasta la 06) y crea los usuarios demo: `carlos.mendoza@eltriunfo.com` (admin), `diana.gomez@eltriunfo.com` (cajera) y, opcional, `laura.ruiz@eltriunfo.com` (cajera de Sede Norte).
+1. Ejecuta en el SQL Editor de Supabase, en orden, `database/01_…` a `database/07_…` (o `surtify_supabase_completo.sql`, que ya incluye hasta la 07) y crea los usuarios demo: `carlos.mendoza@eltriunfo.com` (admin), `diana.gomez@eltriunfo.com` (cajera) y, opcional, `laura.ruiz@eltriunfo.com` (cajera de Sede Norte).
 2. Edita `config.js` con la URL y la clave anon/publishable de tu proyecto (no la `service_role`).
 3. Sube todo a un repositorio público de GitHub: **Settings → Pages → Deploy from a branch → `main` / root**.
 4. Abre `https://TU-USUARIO.github.io/NOMBRE-DEL-REPO/` e inicia sesión.

@@ -75,3 +75,10 @@ for f in tests/00_shim_supabase_local.sql 01_esquema.sql 02_funciones_y_triggers
 
 - La `anon key` de Supabase es pública por diseño; la protección real son las políticas RLS de `03_seguridad_rls.sql`.
 - **Nunca** subas la `service_role key` al repositorio.
+
+## 07 · Devoluciones y reporte para el contador
+
+- `devolucion_disponible(id_factura)` y `registrar_devolucion(id_factura, items, motivo)`: crea la **nota crédito** (consecutivo `NC-<prefijo>-0001`), reingresa el stock a la sede de la venta y descuenta el efectivo de la **caja abierta de quien devuelve** (si el pago fue en efectivo). No permite devolver más de lo vendido ni sin caja abierta.
+- `reporte_contador(desde, hasta, sucursal)`: facturas, base, IVA por tarifa, devoluciones, ventas netas, método de pago y gastos. El administrador ve todas las sedes; el cajero solo la suya.
+- Vista `v_facturas_recientes` (respeta RLS). En la app: pestañas **Devolver** y **Reporte** (compartir por WhatsApp, copiar, CSV).
+- Pruebas: `tests/30_pruebas_devoluciones_reporte.sql` (se revierte al final).
