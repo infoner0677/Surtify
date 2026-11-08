@@ -5,7 +5,11 @@
 <meta name="theme-color" content="#0b7a5a">
 <title>Surtify · Caja</title>
 <link rel="icon" type="image/png" href="assets/favicon.png">
-<link rel="apple-touch-icon" href="assets/icon-192.png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Surtify">
 <style>
 :root{color-scheme:light dark;--bg:#f4f6f8;--card:#fff;--tx:#18202a;--mu:#667085;--pr:#0b7a5a;--on:#fff;--bd:#e2e6ea;--er:#b42318;--ok:#067647;--wa:#b54708;--wab:#fffaeb}
 @media(prefers-color-scheme:dark){:root{--bg:#10151b;--card:#19202a;--tx:#edf0f3;--mu:#98a2b3;--pr:#2fb386;--on:#06241a;--bd:#2a323d;--er:#f97066;--ok:#47cd89;--wa:#fdb022;--wab:#2a2110}}
@@ -21,6 +25,8 @@ input[type=checkbox]{width:auto;margin:0 6px 0 0}
 label{display:block;font-size:.9rem}
 button{font:inherit;border:0;border-radius:10px;padding:12px 16px;background:var(--pr);color:var(--on);font-weight:600;cursor:pointer}
 button.g{background:transparent;color:var(--tx);border:1px solid var(--bd)}button.s{padding:6px 12px}button:disabled{opacity:.5}
+[hidden]{display:none!important}
+.off{position:sticky;top:0;z-index:5;background:var(--wab);color:var(--wa);border-bottom:1px solid var(--bd);padding:8px 12px;text-align:center;font-size:.9rem}
 .hd{display:flex;align-items:center;gap:8px;margin:2px 0 4px}.logo{height:38px;width:auto;display:block}.who{margin:0 0 12px}
 .login{max-width:420px;margin:9vh auto 0}.logo-l{display:block;width:min(260px,70%);height:auto;margin:6px auto 4px}
 .tabs{display:flex;gap:6px;margin:12px 0;overflow-x:auto}.tabs button{background:var(--card);color:var(--tx);border:1px solid var(--bd);white-space:nowrap}
@@ -83,11 +89,11 @@ function login(){
   app.innerHTML=`<div class="login"><div class="card"><img class="logo-l" src="assets/logo.png" alt="Surtify"><p class="mu" style="text-align:center">Caja registradora simple</p>
   <label>Correo<input id="em" type="email" autocomplete="username"></label>
   <label>Contraseña<input id="pw" type="password" autocomplete="current-password"></label>
-  <button id="go" style="width:100%">Entrar</button></div></div>`;
+  <button id="go" style="width:100%">Entrar</button><button class="g s" id="ins" hidden style="width:100%;margin-top:8px">Instalar app en este dispositivo</button></div></div>`;
   const go=async()=>{
     const {error}=await db.auth.signInWithPassword({email:$('#em').value.trim(),password:$('#pw').value});
     if(error){toast('Correo o contraseña incorrectos',true)}else{boot()}};
-  $('#go').onclick=go;
+  $('#go').onclick=go;btnInstalar();
   $('#pw').addEventListener('keydown',e=>{if(e.key==='Enter')go()});
 }
 
@@ -105,7 +111,7 @@ async function refresh(){
 }
 
 function head(){
-  return `<div class="hd"><img class="logo" src="assets/logo.png" alt="Surtify"><span class="sp"></span><button class="g s" id="lo">Salir</button></div>
+  return `<div class="hd"><img class="logo" src="assets/logo.png" alt="Surtify"><span class="sp"></span><button class="g s" id="ins" hidden>Instalar app</button><button class="g s" id="lo">Salir</button></div>
   <div class="mu who">${esc(perfil.nombre_comercial)} · ${esc(perfil.nombre_sucursal)} · ${esc(perfil.nombre)} · ${adm?'Modo ERP multisede':'Caja simple'}</div>`;
 }
 function setBadge(){const b=app.querySelector('[data-t="inv"]');if(b)b.innerHTML='Inventario'+(invAlertas?` <span class="badge">${invAlertas}</span>`:'')}
@@ -119,7 +125,7 @@ function bindOpen(){
 
 function render(){
   const h=head();
-  if(!adm&&!caja){app.innerHTML=h+openCard();$('#lo').onclick=logout;bindOpen();return}
+  if(!adm&&!caja){app.innerHTML=h+openCard();$('#lo').onclick=logout;btnInstalar();bindOpen();return}
   const tabs=adm?[['panel','Panel'],['inv','Inventario'+(invAlertas?` <span class="badge">${invAlertas}</span>`:'')],['vender','Vender'],['facturas','Facturas'],['fiados','Fiados'],['devolver','Devolver'],['gasto','Gasto'],['reporte','Reporte'],['cerrar','Cerrar caja']]
                 :[['vender','Vender'],['facturas','Mis ventas'],['fiados','Fiados'],['devolver','Devolver'],['gasto','Gasto'],['reporte','Reporte'],['cerrar','Cerrar caja']];
   const deCaja=['vender','devolver','gasto','cerrar'].includes(tab);
@@ -128,7 +134,7 @@ function render(){
     <div><span class="mu">${caja.num_ventas===1?'Venta':'Ventas'} (${caja.num_ventas})</span><b>${cop(caja.total_ventas)}</b></div>
     <div><span class="mu">Gastos</span><b>${cop(caja.total_gastos)}</b></div></div>`:'')+
     `<div class="tabs">${tabs.map(t=>`<button data-t="${t[0]}" class="${tab===t[0]?'on':''}">${t[1]}</button>`).join('')}</div><div id="body"></div>`;
-  $('#lo').onclick=logout;
+  $('#lo').onclick=logout;btnInstalar();
   app.querySelectorAll('[data-t]').forEach(b=>{b.onclick=()=>{tab=b.dataset.t;render()}});
   if(deCaja&&!caja){$('#body').innerHTML=openCard();bindOpen();return}
   ({panel:vPanel,inv:vInv,vender:vVender,facturas:vFacturas,fiados:vFiados,devolver:vDevolver,gasto:vGasto,reporte:vReporte,cerrar:vCerrar})[tab]();
@@ -517,5 +523,28 @@ async function vPanel(){
   $('#rf').onclick=()=>{vPanel()};
   app.querySelectorAll('[data-al]').forEach(b=>{b.onclick=()=>{invSuc=b.dataset.al;invSolo=true;invQ='';tab='inv';render()}});
 }
+
+/* ---------- App instalable (PWA) ---------- */
+let instalar=null;
+const esIOS=/iphone|ipad|ipod/i.test(navigator.userAgent)&&!window.MSStream;
+const instalada=()=>(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true;
+function btnInstalar(){
+  const b=document.getElementById('ins');if(!b)return;
+  if(instalada()||(!instalar&&!esIOS)){b.hidden=true;return}
+  b.hidden=false;
+  b.onclick=async()=>{
+    if(instalar){instalar.prompt();await instalar.userChoice;instalar=null;btnInstalar()}
+    else{const m=modal('<h2>Instalar Surtify</h2><p>En iPhone o iPad: toca el botón <b>Compartir</b> de Safari y elige <b>Agregar a inicio</b>.</p><button id="ix" style="width:100%">Entendido</button>');m.querySelector('#ix').onclick=()=>m.remove()}};
+}
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();instalar=e;btnInstalar()});
+window.addEventListener('appinstalled',()=>{instalar=null;toast('Surtify quedó instalada');btnInstalar()});
+function avisoRed(){
+  let b=document.getElementById('off');
+  if(navigator.onLine){if(b)b.remove();return}
+  if(!b){b=document.createElement('div');b.id='off';b.className='off';b.textContent='Sin conexión: puedes ver la app, pero vender y consultar datos necesita internet.';document.body.prepend(b)}
+}
+window.addEventListener('online',avisoRed);window.addEventListener('offline',avisoRed);
+if('serviceWorker' in navigator&&location.protocol.startsWith('http'))window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+avisoRed();
 init();
 </script></body></html>

@@ -12,3 +12,10 @@
 4. Abre `https://TU-USUARIO.github.io/NOMBRE-DEL-REPO/` e inicia sesión.
 
 Recuerda: los proyectos gratis de Supabase se pausan tras 7 días sin actividad; reactívalo antes de la sustentación.
+
+## Instalar como app (PWA)
+Surtify es una aplicación web instalable: `manifest.webmanifest`, `sw.js` e íconos en `assets/`.
+- **Android / Chrome / Edge:** botón "Instalar app" dentro de Surtify (o menú ⋮ → "Instalar aplicación").
+- **iPhone / iPad:** en Safari, Compartir → "Agregar a inicio".
+- El service worker guarda la interfaz para que la app abra sin internet, pero **no** guarda datos ni ventas: vender y consultar requieren conexión (el modo sin conexión con sincronización queda como siguiente etapa).
+- Al cambiar `index.html`, sube la versión `V` en `sw.js` si quieres forzar la renovación de la copia guardada.
