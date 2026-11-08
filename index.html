@@ -56,6 +56,7 @@ const hora=x=>x?new Date(x).toLocaleString('es-CO',{timeZone:'America/Bogota',da
 const pl=(n,w)=>`${n||0} ${w}${Number(n)===1?'':'s'}`;
 const ddmm=f=>String(f).slice(8,10)+'/'+String(f).slice(5,7);
 let db,perfil,caja,adm=false,prods=[],cart=new Map(),tab='vender',q='',busy=false;
+let cartera=[],carteraOk=false,metodoSel='Efectivo',cliSel='',fiQ='';
 let dias=7,invData=[],cats=[],sucs=[],invAlertas=0,invQ='',invSuc='',invSolo=false;
 
 function toast(m,bad){const t=$('#toast');t.textContent=m;t.style.background=bad?'var(--er)':'var(--tx)';t.style.color=bad?'#fff':'var(--bg)';t.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(()=>{t.style.display='none'},4500)}
@@ -95,7 +96,7 @@ async function boot(){
   if(!p.data){app.innerHTML='<div class="card"><h2>Usuario sin empleado</h2><p>Tu cuenta no está vinculada a un empleado activo.</p><button class="g" id="lo">Salir</button></div>';$('#lo').onclick=logout;return}
   perfil=p.data;adm=!!perfil.es_administrador;tab=adm?'panel':'vender';await refresh();
 }
-async function logout(){await db.auth.signOut();cart.clear();devSel=null;repR=null;caja=null;perfil=null;login()}
+async function logout(){await db.auth.signOut();cart.clear();devSel=null;repR=null;cartera=[];carteraOk=false;metodoSel='Efectivo';cliSel='';caja=null;perfil=null;login()}
 async function refresh(){
   caja=(await call('resumen_caja')).data;
   if(caja){const {data,error}=await db.from('v_productos_pos').select('*').order('nombre');if(error)toast(error.message,true);prods=data||[]}
@@ -119,8 +120,8 @@ function bindOpen(){
 function render(){
   const h=head();
   if(!adm&&!caja){app.innerHTML=h+openCard();$('#lo').onclick=logout;bindOpen();return}
-  const tabs=adm?[['panel','Panel'],['inv','Inventario'+(invAlertas?` <span class="badge">${invAlertas}</span>`:'')],['vender','Vender'],['devolver','Devolver'],['gasto','Gasto'],['reporte','Reporte'],['cerrar','Cerrar caja']]
-                :[['vender','Vender'],['devolver','Devolver'],['gasto','Gasto'],['reporte','Reporte'],['cerrar','Cerrar caja']];
+  const tabs=adm?[['panel','Panel'],['inv','Inventario'+(invAlertas?` <span class="badge">${invAlertas}</span>`:'')],['vender','Vender'],['fiados','Fiados'],['devolver','Devolver'],['gasto','Gasto'],['reporte','Reporte'],['cerrar','Cerrar caja']]
+                :[['vender','Vender'],['fiados','Fiados'],['devolver','Devolver'],['gasto','Gasto'],['reporte','Reporte'],['cerrar','Cerrar caja']];
   const deCaja=['vender','devolver','gasto','cerrar'].includes(tab);
   app.innerHTML=h+(caja&&deCaja?`<div class="stats">
     <div><span class="mu">Efectivo esperado</span><b>${cop(caja.monto_cierre_esperado)}</b></div>
@@ -130,7 +131,7 @@ function render(){
   $('#lo').onclick=logout;
   app.querySelectorAll('[data-t]').forEach(b=>{b.onclick=()=>{tab=b.dataset.t;render()}});
   if(deCaja&&!caja){$('#body').innerHTML=openCard();bindOpen();return}
-  ({panel:vPanel,inv:vInv,vender:vVender,devolver:vDevolver,gasto:vGasto,reporte:vReporte,cerrar:vCerrar})[tab]();
+  ({panel:vPanel,inv:vInv,vender:vVender,fiados:vFiados,devolver:vDevolver,gasto:vGasto,reporte:vReporte,cerrar:vCerrar})[tab]();
 }
 
 /* ---------- Vender ---------- */
@@ -161,29 +162,78 @@ function cartView(){
   el.innerHTML=[...cart.values()].map(x=>`<div class="line"><div class="sp">${esc(x.p.nombre)}<div class="mu">${cop(x.p.precio_venta)}</div></div>
     <button class="g s" data-m="${x.p.id_producto}">−</button><b>${x.qty}</b><button class="g s" data-a="${x.p.id_producto}">+</button><b style="min-width:80px;text-align:right">${cop(x.qty*x.p.precio_venta)}</b></div>`).join('')+
   `<div class="row" style="margin-top:10px"><span class="sp mu">Total</span><span class="tot">${cop(total())}</span></div>
-   <select id="mp"><option>Efectivo</option><option>Nequi</option><option>Daviplata</option><option>Bre-B</option><option>Tarjeta</option></select>
+   <select id="mp"><option>Efectivo</option><option>Nequi</option><option>Daviplata</option><option>Bre-B</option><option>Tarjeta</option><option>Fiado</option></select>
+   <div id="fcli" style="display:none"><div class="row"><select id="fc" class="sp"></select><button class="g s" id="fn">+ Nuevo</button></div><div id="fdeb" class="mu"></div></div>
    <div id="efe"><input id="rec" type="number" inputmode="decimal" placeholder="Efectivo recibido"><div id="cam" class="mu"></div></div>
    <div class="row"><button class="g" id="vac">Vaciar</button><button class="sp" id="cob">Cobrar</button></div>`;
   el.querySelectorAll('[data-m]').forEach(b=>{b.onclick=()=>{const x=cart.get(+b.dataset.m);x.qty--;if(x.qty<=0)cart.delete(+b.dataset.m);cartView()}});
   el.querySelectorAll('[data-a]').forEach(b=>{b.onclick=()=>add(cart.get(+b.dataset.a).p)});
-  const sync=()=>{$('#efe').style.display=$('#mp').value==='Efectivo'?'block':'none';const r=Number($('#rec').value);
+  const fillCli=()=>{const sel=$('#fc');sel.innerHTML='<option value="">Elige el cliente</option>'+cartera.map(c=>`<option value="${c.id_cliente}">${esc(c.nombre)}${Number(c.saldo)>0?' · debe '+cop(c.saldo):''}</option>`).join('');sel.value=cliSel;
+    const c=cartera.find(x=>String(x.id_cliente)===String(cliSel));$('#fdeb').textContent=c?(c.cupo_fiado!=null?'Cupo '+cop(c.cupo_fiado)+' · ':'')+'debe '+cop(c.saldo):''};
+  const sync=()=>{metodoSel=$('#mp').value;$('#efe').style.display=metodoSel==='Efectivo'?'block':'none';$('#fcli').style.display=metodoSel==='Fiado'?'block':'none';
+    if(metodoSel==='Fiado'){if(!carteraOk){loadCartera().then(()=>{if(metodoSel==='Fiado')fillCli()})}else fillCli()}const r=Number($('#rec').value);
     $('#cam').innerHTML=r?(r>=total()?'Cambio: <b class="ok">'+cop(r-total())+'</b>':'<span class="er">Falta '+cop(total()-r)+'</span>'):''};
-  $('#mp').onchange=sync;$('#rec').oninput=sync;sync();
+  $('#mp').value=metodoSel;$('#mp').onchange=sync;$('#rec').oninput=sync;$('#fc').onchange=e=>{cliSel=e.target.value;fillCli()};
+  $('#fn').onclick=()=>nuevoCliente(c=>{cliSel=String(c.id_cliente);loadCartera().then(()=>cartView())});sync();
   $('#vac').onclick=()=>{cart.clear();cartView()};
   $('#cob').onclick=async e=>{if(busy)return;busy=true;e.target.disabled=true;
-    const ef=$('#mp').value==='Efectivo';
+    const ef=$('#mp').value==='Efectivo',fi=$('#mp').value==='Fiado';
+    if(fi&&!cliSel){toast('Elige el cliente al que le fías',true);busy=false;e.target.disabled=false;return}
     const r=await call('registrar_venta',{p_items:[...cart.values()].map(x=>({id_producto:x.p.id_producto,cantidad:x.qty})),
-      p_metodo_pago:$('#mp').value,p_monto_recibido:ef&&$('#rec').value?Number($('#rec').value):null});
+      p_metodo_pago:$('#mp').value,p_monto_recibido:ef&&$('#rec').value?Number($('#rec').value):null,p_id_cliente:fi?Number(cliSel):null});
     busy=false;e.target.disabled=false;
-    if(r.data){cart.clear();q='';await refresh();recibo(r.data)}};
+    if(r.data){const cn=fi?(cartera.find(x=>String(x.id_cliente)===String(cliSel))||{}).nombre:null;cart.clear();q='';metodoSel='Efectivo';cliSel='';carteraOk=false;await refresh();recibo(r.data,cn)}};
 }
-function recibo(v){
+function recibo(v,cn){
   const m=modal(`<h2 class="ok">Venta registrada</h2><div class="mu">Factura ${esc(v.numero_factura)}</div>
    <div class="line"><span class="sp">Subtotal</span>${cop(v.subtotal)}</div><div class="line"><span class="sp">IVA incluido</span>${cop(v.impuestos)}</div>
    <div class="line"><span class="sp"><b>Total</b></span><b>${cop(v.total)}</b></div>
-   ${v.metodo_pago==='Efectivo'?`<div class="line"><span class="sp">Recibido</span>${cop(v.monto_recibido)}</div><div class="line"><span class="sp"><b>Cambio</b></span><b class="ok">${cop(v.cambio)}</b></div>`:`<div class="line"><span class="sp">Pago</span>${esc(v.metodo_pago)}</div>`}
+   ${v.metodo_pago==='Efectivo'?`<div class="line"><span class="sp">Recibido</span>${cop(v.monto_recibido)}</div><div class="line"><span class="sp"><b>Cambio</b></span><b class="ok">${cop(v.cambio)}</b></div>`:v.metodo_pago==='Fiado'?`<div class="line"><span class="sp">Fiado a</span><b>${esc(cn||'cliente')}</b></div><div class="line"><span class="sp"><b>Debe en total</b></span><b class="wa">${cop(v.saldo_cliente)}</b></div>`:`<div class="line"><span class="sp">Pago</span>${esc(v.metodo_pago)}</div>`}
    <button style="width:100%;margin-top:10px">Nueva venta</button>`);
   m.querySelector('button').onclick=()=>m.remove();
+}
+
+/* ---------- Fiados (cuentas por cobrar) ---------- */
+async function loadCartera(){const {data,error}=await db.from('v_cartera').select('*').order('saldo',{ascending:false}).order('nombre');
+  if(error){toast(error.message,true);return false}cartera=data||[];carteraOk=true;return true}
+const waTel=t=>{const d=String(t||'').replace(/\D/g,'');return d.length===10?'57'+d:d};
+const waCobro=(c,saldo)=>'https://wa.me/'+waTel(c.telefono)+'?text='+encodeURIComponent(`Hola ${c.nombre}, te escribimos de ${perfil.nombre_comercial}. Tu saldo pendiente es ${cop(saldo)}. Cuando puedas, pásate o escríbenos para ponernos de acuerdo. ¡Gracias!`);
+function nuevoCliente(done){
+  const m=modal(`<h2>Nuevo cliente</h2><input id="cn" placeholder="Nombre"><input id="ct" type="tel" inputmode="tel" placeholder="Celular (para recordarle por WhatsApp)">
+    <input id="cc" type="number" inputmode="decimal" min="0" placeholder="Cupo máximo de fiado (opcional)">
+    <button id="cg" style="width:100%">Guardar cliente</button><button class="g" id="cx" style="width:100%;margin-top:6px">Cancelar</button>`);
+  m.querySelector('#cx').onclick=()=>m.remove();
+  m.querySelector('#cg').onclick=async()=>{const r=await call('crear_cliente',{p_nombre:$('#cn').value,p_telefono:$('#ct').value||null,p_cupo:$('#cc').value?Number($('#cc').value):null});
+    if(r.data){m.remove();toast('Cliente guardado');carteraOk=false;done&&done(r.data)}};
+}
+async function vFiados(){
+  $('#body').innerHTML='<div class="card"><span class="mu">Cargando cartera…</span></div>';
+  if(!await loadCartera())return;if(tab!=='fiados')return;
+  const deben=cartera.filter(c=>Number(c.saldo)>0),tot=deben.reduce((s,c)=>s+Number(c.saldo),0);
+  $('#body').innerHTML=`<div class="card"><div class="row"><h2 style="margin:0">Fiados</h2><span class="sp"></span><button id="nc" class="s">+ Cliente</button></div>
+    <div class="kpis" style="margin:10px 0 0"><div><span class="mu">Por cobrar</span><b>${cop(tot)}</b><span class="mu">${pl(deben.length,'cliente')} con deuda</span></div></div></div>
+    <div class="card"><input id="fq" placeholder="Buscar cliente" value="${esc(fiQ)}" autocomplete="off"><div id="fl"></div></div>`;
+  const list=()=>{const t=fiQ.trim().toLowerCase(),rows=cartera.filter(c=>!t||c.nombre.toLowerCase().includes(t)||(c.telefono||'').includes(t));
+    $('#fl').innerHTML=rows.length?rows.map(c=>`<button class="g" data-c="${c.id_cliente}" style="width:100%;text-align:left;margin-bottom:6px"><b>${esc(c.nombre)}</b><span style="float:right" class="${Number(c.saldo)>0?'er':'ok'}"><b>${cop(c.saldo)}</b></span><br><span class="mu">${esc(c.telefono||'sin celular')}${c.cupo_fiado!=null?' · cupo '+cop(c.cupo_fiado):''}</span></button>`).join(''):'<span class="mu">Aún no hay clientes. Crea el primero con “+ Cliente”.</span>';
+    $('#fl').querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>verCliente(Number(b.dataset.c)))};
+  $('#fq').oninput=e=>{fiQ=e.target.value;list()};$('#nc').onclick=()=>nuevoCliente(()=>vFiados());list();
+}
+async function verCliente(id){
+  const r=await call('estado_cuenta',{p_id_cliente:id});if(!r.data)return;const e=r.data,debe=Number(e.saldo)>0;
+  const sg={Cargo:'+','Abono':'−','Nota crédito':'−'};
+  const m=modal(`<h2>${esc(e.nombre)}</h2><div class="line"><span class="sp">Saldo</span><b class="${debe?'er':'ok'}">${cop(e.saldo)}</b></div>
+    ${e.cupo_fiado!=null?`<div class="line mu"><span class="sp">Cupo</span>${cop(e.cupo_fiado)}</div>`:''}
+    ${debe?`<h2 style="margin-top:12px">Recibir abono</h2><input id="am" type="number" inputmode="decimal" min="0" placeholder="Monto"><select id="ap"><option>Efectivo</option><option>Nequi</option><option>Daviplata</option><option>Bre-B</option><option>Tarjeta</option></select>
+      <button id="ar" style="width:100%">Registrar abono</button>
+      ${e.telefono?`<button class="g" id="aw" style="width:100%;margin-top:6px">Recordar por WhatsApp</button>`:'<p class="mu">Agrega el celular del cliente para poder recordarle por WhatsApp.</p>'}`:'<p class="ok"><b>Está al día</b></p>'}
+    <h2 style="margin-top:12px">Movimientos</h2><div style="max-height:220px;overflow:auto">${e.movimientos.length?e.movimientos.map(x=>`<div class="line"><span class="sp">${esc(x.tipo)}${x.metodo_pago&&x.tipo==='Abono'?' · '+esc(x.metodo_pago):''}<div class="mu">${hora(x.fecha)}${x.nota?' · '+esc(x.nota):''}</div></span><b class="${x.tipo==='Cargo'?'er':'ok'}">${sg[x.tipo]||''}${cop(x.monto)}</b></div>`).join(''):'<span class="mu">Sin movimientos</span>'}</div>
+    <button class="g" id="ac" style="width:100%;margin-top:10px">Cerrar</button>`);
+  m.querySelector('#ac').onclick=()=>m.remove();
+  if(debe){
+    m.querySelector('#ar').onclick=async()=>{const a=await call('registrar_abono',{p_id_cliente:id,p_monto:Number($('#am').value),p_metodo_pago:$('#ap').value});
+      if(a.data){m.remove();toast('Abono registrado. Saldo: '+cop(a.data.saldo_nuevo));await refresh()}};
+    const w=m.querySelector('#aw');if(w)w.onclick=()=>window.open(waCobro(e,e.saldo),'_blank','noopener');
+  }
 }
 
 /* ---------- Devoluciones (nota crédito) ---------- */
@@ -214,7 +264,7 @@ async function vDevolver(){
     if(r.data){const n=r.data;devSel=null;await refresh();
       const m=modal(`<h2>Devolución registrada</h2><p><b>${esc(n.numero_nota)}</b> · ${cop(n.total)}</p>
         ${n.lineas.map(l=>`<div class="line"><span class="sp">${esc(l.nombre)} × ${l.cantidad}</span>${cop(l.total)}</div>`).join('')}
-        <p class="${n.efectivo_a_entregar>0?'wa':'mu'}"><b>${n.efectivo_a_entregar>0?'Entrega '+cop(n.efectivo_a_entregar)+' en efectivo al cliente':'Pago en '+esc(n.metodo_pago)+': no sale efectivo del cajón'}</b></p>
+        <p class="${n.efectivo_a_entregar>0?'wa':'mu'}"><b>${n.a_fiado?'Venta fiada: se descontó de la deuda del cliente':n.efectivo_a_entregar>0?'Entrega '+cop(n.efectivo_a_entregar)+' en efectivo al cliente':'Pago en '+esc(n.metodo_pago)+': no sale efectivo del cajón'}</b></p>
         <p class="mu">El stock ya volvió al inventario.</p><button style="width:100%">Listo</button>`);
       m.querySelector('button').onclick=()=>{m.remove();tab='devolver';render()}}};
 }
@@ -240,6 +290,8 @@ function repTexto(r){
   L.push(`Devoluciones (${r.devoluciones.num}): -${cop(r.devoluciones.total)}`,`*Ventas netas: ${cop(r.ventas_netas)}*`,'');
   Object.entries(r.por_metodo||{}).forEach(([k,v])=>L.push(`${k}: ${cop(v)}`));
   L.push(`Gastos de caja: ${cop(r.gastos)}`);
+  if(Number(r.abonos_cartera)>0)L.push(`Abonos de fiados recibidos: ${cop(r.abonos_cartera)}`);
+  if(Number(r.por_cobrar)>0)L.push(`Por cobrar a clientes (fiados): ${cop(r.por_cobrar)}`);
   if((r.por_sucursal||[]).length>1){L.push('');r.por_sucursal.forEach(s=>L.push(`${s.nombre}: ${cop(s.total)} (${pl(s.num,'factura')})`))}
   L.push('','_Generado con Surtify_');return L.join('\n');
 }
@@ -271,6 +323,8 @@ async function vReporte(){
    <div class="line"><span class="sp"><b>Ventas netas</b></span><b>${cop(x.ventas_netas)}</b></div>
    ${Object.entries(x.por_metodo||{}).map(([k,v])=>`<div class="line mu"><span class="sp">${esc(k)}</span>${cop(v)}</div>`).join('')}
    <div class="line"><span class="sp">Gastos de caja</span>${cop(x.gastos)}</div>
+   ${Number(x.abonos_cartera)>0?`<div class="line"><span class="sp">Abonos de fiados recibidos</span>${cop(x.abonos_cartera)}</div>`:''}
+   ${Number(x.por_cobrar)>0?`<div class="line"><span class="sp">Por cobrar (fiados)</span>${cop(x.por_cobrar)}</div>`:''}
    <button id="rw" style="width:100%;margin-top:10px">Compartir por WhatsApp</button>
    <button class="g" id="rc" style="width:100%;margin-top:6px">Copiar resumen</button>
    <button class="g" id="rv" style="width:100%;margin-top:6px">Descargar detalle (CSV)</button>`;
@@ -294,6 +348,7 @@ function vCerrar(){
   $('#body').innerHTML=`<div class="card"><h2>Arqueo</h2>
    <div class="line"><span class="sp">Base de apertura</span>${cop(caja.monto_apertura)}</div>
    <div class="line"><span class="sp">Devoluciones</span>${cop(caja.total_devoluciones)}</div>
+   ${Number(caja.abonos_efectivo)>0?`<div class="line"><span class="sp">Abonos de fiados en efectivo</span>${cop(caja.abonos_efectivo)}</div>`:''}
    <div class="line"><span class="sp"><b>Efectivo esperado en el cajón</b></span><b>${cop(caja.monto_cierre_esperado)}</b></div>
    <h2 style="margin-top:14px">Ventas por método</h2>${mv}
    <h2 style="margin-top:14px">Efectivo contado</h2><input id="real" type="number" inputmode="decimal" placeholder="Cuenta el efectivo y escríbelo aquí">
@@ -391,6 +446,7 @@ function nuevoProducto(){
 async function vPanel(){
   $('#body').innerHTML='<div class="card">Cargando panel…</div>';
   const {data:p}=await call('panel_multisede',{p_dias:dias});
+  const cr=await db.from('v_cartera').select('saldo');const deb=(cr.data||[]).filter(c=>Number(c.saldo)>0),porCobrar=deb.reduce((a,c)=>a+Number(c.saldo),0);
   if(tab!=='panel')return;
   if(!p){$('#body').innerHTML='<div class="card er">No se pudo cargar el panel.</div>';return}
   const t=p.totales||{};
@@ -407,7 +463,8 @@ async function vPanel(){
     <div><span class="mu">Hoy</span><b>${cop(t.ventas_hoy)}</b><span class="mu">${pl(t.num_ventas_hoy,'venta')}</span></div>
     <div><span class="mu">Ticket promedio</span><b>${cop(t.ticket_promedio)}</b></div>
     <div><span class="mu">Gastos de caja</span><b>${cop(p.gastos)}</b></div>
-    <div><span class="mu">Devoluciones</span><b>${cop(p.devoluciones)}</b></div></div>
+    <div><span class="mu">Devoluciones</span><b>${cop(p.devoluciones)}</b></div>
+    <div><span class="mu">Por cobrar (fiados)</span><b>${cop(porCobrar)}</b><span class="mu">${pl(deb.length,'cliente')}</span></div></div>
   <div class="sucs">${(p.sucursales||[]).map(s=>`<div class="card"><h2>${esc(s.nombre)}</h2>
     <div class="line"><span class="sp mu">Hoy</span><b>${cop(s.ventas_hoy)}</b><span class="mu">${pl(s.num_ventas_hoy,'venta')}</span></div>
     <div class="line"><span class="sp mu">Últimos ${p.dias} días</span><b>${cop(s.ventas_periodo)}</b><span class="mu">${pl(s.num_ventas_periodo,'venta')}</span></div>

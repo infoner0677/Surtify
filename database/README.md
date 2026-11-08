@@ -82,3 +82,13 @@ for f in tests/00_shim_supabase_local.sql 01_esquema.sql 02_funciones_y_triggers
 - `reporte_contador(desde, hasta, sucursal)`: facturas, base, IVA por tarifa, devoluciones, ventas netas, método de pago y gastos. El administrador ve todas las sedes; el cajero solo la suya.
 - Vista `v_facturas_recientes` (respeta RLS). En la app: pestañas **Devolver** y **Reporte** (compartir por WhatsApp, copiar, CSV).
 - Pruebas: `tests/30_pruebas_devoluciones_reporte.sql` (se revierte al final).
+
+## 08 · Fiados (cuentas por cobrar)
+
+- Tabla `cartera_movimientos` (cargos, abonos y notas crédito por cliente), columna opcional `clientes.cupo_fiado` y vista `v_cartera` (saldo por cliente, respeta RLS).
+- `registrar_venta` acepta el método **Fiado**: exige cliente, respeta el cupo y no entra efectivo a la caja.
+- `registrar_abono(cliente, monto, método)`: baja la deuda; si el abono es en efectivo suma al efectivo esperado del cajón. No deja abonar más de lo que se debe.
+- `crear_cliente(...)` y `estado_cuenta(cliente)`.
+- Devolver una venta fiada baja la deuda del cliente (no sale efectivo). `resumen_sesion` y `reporte_contador` incluyen abonos y total por cobrar.
+- En la app: pestaña **Fiados** (clientes, saldo, estado de cuenta, abonos, recordatorio por WhatsApp), opción **Fiado** al cobrar y KPI "Por cobrar" en el panel del administrador.
+- Pruebas: `tests/40_pruebas_fiados.sql` (se revierte al final).
