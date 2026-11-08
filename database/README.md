@@ -51,12 +51,17 @@ Columnas nuevas: `roles.es_administrador`, `productos.iva_porcentaje/activo`, `e
 | `registrar_gasto(monto, concepto, descripcion)` | Vale de caja; resta del efectivo esperado |
 | `resumen_caja()` | Estado en vivo del turno (esperado, ventas por método, gastos) |
 | `cerrar_caja(efectivo_contado)` | Arqueo: esperado vs. contado y diferencia |
+| `ajustar_stock(sucursal, producto, delta, stock_minimo)` | **Admin.** Entrada o corrección de stock y stock mínimo; nunca deja stock negativo |
+| `crear_producto(...)` | **Admin.** Producto nuevo con inventario en todas las sedes |
+| `panel_multisede(dias)` | **Admin.** KPIs, ventas por sede/día/método, top productos, alertas y turnos |
 
-Vista para el POS: `v_productos_pos` (producto + stock de mi sucursal).
+Vistas: `v_productos_pos` (producto + stock de mi sucursal) y `v_inventario_admin` (inventario por sede con bandera de alerta).
+
+`06_inventario_y_panel.sql` agrega además una segunda sucursal demo, **Sede Norte - Chapinero**, con la cajera Laura Ruiz.
 
 ## Pruebas
 
-`tests/` contiene un simulador mínimo de Supabase Auth y 11 bloques de pruebas (venta del informe al centavo,
+`tests/20_pruebas_inventario_panel.sql` se puede pegar directo en el SQL Editor de Supabase: prueba inventario y panel y **revierte todo** al final (termina con un error `PRUEBAS_OK` a propósito). Además, `tests/` contiene un simulador mínimo de Supabase Auth y 11 bloques de pruebas (venta del informe al centavo,
 sobreventa, aislamiento entre comercios, permisos del cajero, nota crédito, cierre de caja).
 Se ejecutaron sobre PostgreSQL 16: todas pasan. Para repetirlas en local:
 

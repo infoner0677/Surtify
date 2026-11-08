@@ -4,30 +4,46 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b7a5a">
 <title>Surtify · Caja</title>
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="apple-touch-icon" href="assets/icon-192.png">
 <style>
-:root{color-scheme:light dark;--bg:#f4f6f8;--card:#fff;--tx:#18202a;--mu:#667085;--pr:#0b7a5a;--on:#fff;--bd:#e2e6ea;--er:#b42318;--ok:#067647;--wa:#b54708}
-@media(prefers-color-scheme:dark){:root{--bg:#10151b;--card:#19202a;--tx:#edf0f3;--mu:#98a2b3;--pr:#2fb386;--on:#06241a;--bd:#2a323d;--er:#f97066;--ok:#47cd89;--wa:#fdb022}}
+:root{color-scheme:light dark;--bg:#f4f6f8;--card:#fff;--tx:#18202a;--mu:#667085;--pr:#0b7a5a;--on:#fff;--bd:#e2e6ea;--er:#b42318;--ok:#067647;--wa:#b54708;--wab:#fffaeb}
+@media(prefers-color-scheme:dark){:root{--bg:#10151b;--card:#19202a;--tx:#edf0f3;--mu:#98a2b3;--pr:#2fb386;--on:#06241a;--bd:#2a323d;--er:#f97066;--ok:#47cd89;--wa:#fdb022;--wab:#2a2110}}
 *{box-sizing:border-box}html,body{margin:0}
 body{background:var(--bg);color:var(--tx);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0)}
-.w{max-width:760px;margin:0 auto;padding:12px}
+.w{max-width:980px;margin:0 auto;padding:12px}
 h1{font-size:1.15rem;margin:0}h2{font-size:1.05rem;margin:0 0 8px}
 .card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px;margin-bottom:12px}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.sp{flex:1}
 .mu{color:var(--mu);font-size:.86rem}.er{color:var(--er)}.ok{color:var(--ok)}.wa{color:var(--wa)}
 input,select{width:100%;padding:12px;border:1px solid var(--bd);border-radius:10px;background:var(--bg);color:var(--tx);font:inherit;margin:4px 0 8px}
+input[type=checkbox]{width:auto;margin:0 6px 0 0}
+label{display:block;font-size:.9rem}
 button{font:inherit;border:0;border-radius:10px;padding:12px 16px;background:var(--pr);color:var(--on);font-weight:600;cursor:pointer}
 button.g{background:transparent;color:var(--tx);border:1px solid var(--bd)}button.s{padding:6px 12px}button:disabled{opacity:.5}
-.tabs{display:flex;gap:6px;margin-bottom:12px;overflow-x:auto}.tabs button{background:var(--card);color:var(--tx);border:1px solid var(--bd);white-space:nowrap}
+.hd{display:flex;align-items:center;gap:8px;margin:2px 0 4px}.logo{height:38px;width:auto;display:block}.who{margin:0 0 12px}
+.login{max-width:420px;margin:9vh auto 0}.logo-l{display:block;width:min(260px,70%);height:auto;margin:6px auto 4px}
+.tabs{display:flex;gap:6px;margin:12px 0;overflow-x:auto}.tabs button{background:var(--card);color:var(--tx);border:1px solid var(--bd);white-space:nowrap}
 .tabs button.on{background:var(--pr);color:var(--on);border-color:var(--pr)}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.stats div{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:10px}
-.stats b{display:block;font-size:1.05rem}
+.badge{display:inline-block;min-width:20px;padding:0 6px;border-radius:10px;background:var(--er);color:#fff;font-size:.75rem;line-height:20px;text-align:center;margin-left:4px}
+.stats,.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.kpis{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:12px}
+.stats div,.kpis div{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:10px}
+.stats b,.kpis b{display:block;font-size:1.05rem}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:12px}.two .card{margin:0}.two{margin-bottom:12px}
+.sucs{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-bottom:12px}.sucs .card{margin:0}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;max-height:260px;overflow:auto}
 .p{background:var(--bg);color:var(--tx);border:1px solid var(--bd);text-align:left;font-weight:500}.p small{display:block;color:var(--mu);font-weight:400}
 .line{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--bd)}.line:last-child{border:0}
 .tot{font-size:1.4rem;font-weight:700}
-.t{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:.9rem}td,th{padding:6px;border-bottom:1px solid var(--bd);text-align:left}
-#toast{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0));background:var(--tx);color:var(--bg);padding:12px;border-radius:10px;display:none;z-index:9}
-.modal{position:fixed;inset:0;background:#0009;display:flex;align-items:center;justify-content:center;padding:16px;z-index:8}.modal .card{max-width:420px;width:100%;margin:0}
+.alert{background:var(--wab);border-color:var(--wa)}
+.t{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:.9rem}td,th{padding:7px 6px;border-bottom:1px solid var(--bd);text-align:left;vertical-align:middle}th{color:var(--mu);font-weight:600;white-space:nowrap}
+td.n,th.n{text-align:right;white-space:nowrap}
+.bars{display:flex;align-items:flex-end;gap:4px}.col{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:150px}
+.col i{display:block;width:100%;background:var(--pr);border-radius:4px 4px 0 0;min-height:2px}.col small{font-size:.65rem;color:var(--mu);height:14px;white-space:nowrap}
+.meter{height:8px;border-radius:4px;background:var(--bd);margin:3px 0 8px;overflow:hidden}.meter i{display:block;height:100%;background:var(--pr)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}.chips button{padding:6px 12px}
+#toast{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0));background:var(--tx);color:var(--bg);padding:12px;border-radius:10px;display:none;z-index:99}
+.modal{position:fixed;inset:0;background:#0009;display:flex;align-items:center;justify-content:center;padding:16px;z-index:50}.modal .card{max-width:440px;width:100%;margin:0;max-height:92vh;overflow:auto}
 </style></head>
 <body><div class="w" id="app"></div><div id="toast"></div>
 <script src="config.js"></script>
@@ -36,13 +52,20 @@ button.g{background:transparent;color:var(--tx);border:1px solid var(--bd)}butto
 const $=s=>document.querySelector(s), app=$('#app');
 const cop=n=>new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0}).format(n||0);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let db,perfil,caja,prods=[],cart=new Map(),tab='vender',q='',busy=false;
+const hora=x=>x?new Date(x).toLocaleString('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'—';
+const ddmm=f=>String(f).slice(8,10)+'/'+String(f).slice(5,7);
+let db,perfil,caja,adm=false,prods=[],cart=new Map(),tab='vender',q='',busy=false;
+let dias=7,invData=[],cats=[],sucs=[],invAlertas=0,invQ='',invSuc='',invSolo=false;
 
-function toast(m,bad){const t=$('#toast');t.textContent=m;t.style.background=bad?'var(--er)':'var(--tx)';t.style.color=bad?'#fff':'var(--bg)';t.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(()=>t.style.display='none',4500)}
+function toast(m,bad){const t=$('#toast');t.textContent=m;t.style.background=bad?'var(--er)':'var(--tx)';t.style.color=bad?'#fff':'var(--bg)';t.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(()=>{t.style.display='none'},4500)}
 async function call(fn,args){ // llama una función RPC y muestra el error legible del servidor
   const {data,error}=await db.rpc(fn,args||{});
   if(error){toast(error.message,true);return {error}}
   return {data};
+}
+function modal(html){
+  const m=document.createElement('div');m.className='modal';m.innerHTML='<div class="card">'+html+'</div>';
+  m.addEventListener('mousedown',e=>{if(e.target===m)m.remove()});document.body.appendChild(m);return m;
 }
 
 async function init(){
@@ -51,68 +74,83 @@ async function init(){
     app.innerHTML='<div class="card"><h2>Falta configurar Supabase</h2><p>Edita <b>config.js</b> y pega la URL y la clave anon de tu proyecto.</p></div>';return}
   db=supabase.createClient(c.SUPABASE_URL,c.SUPABASE_ANON_KEY);
   const {data:{session}}=await db.auth.getSession();
-  session?boot():login();
+  if(session){boot()}else{login()}
 }
 
 function login(){
-  app.innerHTML=`<div class="card" style="margin-top:12vh"><h1>Surtify</h1><p class="mu">Caja registradora simple</p>
+  app.innerHTML=`<div class="login"><div class="card"><img class="logo-l" src="assets/logo.png" alt="Surtify"><p class="mu" style="text-align:center">Caja registradora simple</p>
   <label>Correo<input id="em" type="email" autocomplete="username"></label>
   <label>Contraseña<input id="pw" type="password" autocomplete="current-password"></label>
-  <button id="go" style="width:100%">Entrar</button></div>`;
+  <button id="go" style="width:100%">Entrar</button></div></div>`;
   const go=async()=>{
     const {error}=await db.auth.signInWithPassword({email:$('#em').value.trim(),password:$('#pw').value});
-    error?toast('Correo o contraseña incorrectos',true):boot()};
-  $('#go').onclick=go;$('#pw').onkeydown=e=>{if(e.key==='Enter')go()};
+    if(error){toast('Correo o contraseña incorrectos',true)}else{boot()}};
+  $('#go').onclick=go;
+  $('#pw').addEventListener('keydown',e=>{if(e.key==='Enter')go()});
 }
 
 async function boot(){
   const p=await call('perfil_actual');
   if(!p.data){app.innerHTML='<div class="card"><h2>Usuario sin empleado</h2><p>Tu cuenta no está vinculada a un empleado activo.</p><button class="g" id="lo">Salir</button></div>';$('#lo').onclick=logout;return}
-  perfil=p.data;await refresh();
+  perfil=p.data;adm=!!perfil.es_administrador;tab=adm?'panel':'vender';await refresh();
 }
-async function logout(){await db.auth.signOut();cart.clear();login()}
+async function logout(){await db.auth.signOut();cart.clear();caja=null;perfil=null;login()}
 async function refresh(){
   caja=(await call('resumen_caja')).data;
   if(caja){const {data,error}=await db.from('v_productos_pos').select('*').order('nombre');if(error)toast(error.message,true);prods=data||[]}
+  if(adm){const {count}=await db.from('v_inventario_admin').select('id_inventario',{count:'exact',head:true}).eq('en_alerta',true);invAlertas=count||0}
   render();
 }
 
+function head(){
+  return `<div class="hd"><img class="logo" src="assets/logo.png" alt="Surtify"><span class="sp"></span><button class="g s" id="lo">Salir</button></div>
+  <div class="mu who">${esc(perfil.nombre_comercial)} · ${esc(perfil.nombre_sucursal)} · ${esc(perfil.nombre)} · ${adm?'Modo ERP multisede':'Caja simple'}</div>`;
+}
+function setBadge(){const b=app.querySelector('[data-t="inv"]');if(b)b.innerHTML='Inventario'+(invAlertas?` <span class="badge">${invAlertas}</span>`:'')}
+function openCard(){
+  return `<div class="card"><h2>Abrir caja</h2><p class="mu">Indica el efectivo con el que inicias el turno (la base para dar cambio).</p>
+  <input id="base" type="number" inputmode="decimal" min="0" placeholder="Ej: 50000"><button id="ab" style="width:100%">Abrir caja</button></div>`;
+}
+function bindOpen(){
+  $('#ab').onclick=async()=>{const r=await call('abrir_caja',{p_monto_apertura:Number($('#base').value)});if(r.data){toast('Caja abierta');refresh()}};
+}
+
 function render(){
-  const adm=perfil.es_administrador;
-  const head=`<div class="row" style="margin:4px 0 12px"><div><h1>${esc(perfil.nombre_comercial)}</h1>
-    <span class="mu">${esc(perfil.nombre_sucursal)} · ${esc(perfil.nombre)} · ${adm?'Modo completo':'Caja simple'}</span></div><span class="sp"></span><button class="g s" id="lo">Salir</button></div>`;
-  if(!caja){
-    app.innerHTML=head+`<div class="card"><h2>Abrir caja</h2><p class="mu">Indica el efectivo con el que inicias el turno (la base para dar cambio).</p>
-      <input id="base" type="number" inputmode="decimal" min="0" placeholder="Ej: 50000"><button id="ab" style="width:100%">Abrir caja</button></div>`;
-    $('#lo').onclick=logout;
-    $('#ab').onclick=async()=>{const r=await call('abrir_caja',{p_monto_apertura:Number($('#base').value)});if(r.data){toast('Caja abierta');refresh()}};
-    return}
-  const tabs=[['vender','Vender'],['gasto','Gasto'],['cerrar','Cerrar caja']].concat(adm?[['inv','Inventario']]:[]);
-  app.innerHTML=head+`<div class="stats">
+  const h=head();
+  if(!adm&&!caja){app.innerHTML=h+openCard();$('#lo').onclick=logout;bindOpen();return}
+  const tabs=adm?[['panel','Panel'],['inv','Inventario'+(invAlertas?` <span class="badge">${invAlertas}</span>`:'')],['vender','Vender'],['gasto','Gasto'],['cerrar','Cerrar caja']]
+                :[['vender','Vender'],['gasto','Gasto'],['cerrar','Cerrar caja']];
+  const deCaja=['vender','gasto','cerrar'].includes(tab);
+  app.innerHTML=h+(caja&&deCaja?`<div class="stats">
     <div><span class="mu">Efectivo esperado</span><b>${cop(caja.monto_cierre_esperado)}</b></div>
     <div><span class="mu">Ventas (${caja.num_ventas})</span><b>${cop(caja.total_ventas)}</b></div>
-    <div><span class="mu">Gastos</span><b>${cop(caja.total_gastos)}</b></div></div>
-    <div class="tabs" style="margin-top:12px">${tabs.map(t=>`<button data-t="${t[0]}" class="${tab===t[0]?'on':''}">${t[1]}</button>`).join('')}</div><div id="body"></div>`;
+    <div><span class="mu">Gastos</span><b>${cop(caja.total_gastos)}</b></div></div>`:'')+
+    `<div class="tabs">${tabs.map(t=>`<button data-t="${t[0]}" class="${tab===t[0]?'on':''}">${t[1]}</button>`).join('')}</div><div id="body"></div>`;
   $('#lo').onclick=logout;
-  app.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{tab=b.dataset.t;render()});
-  ({vender:vVender,gasto:vGasto,cerrar:vCerrar,inv:vInv})[tab]();
+  app.querySelectorAll('[data-t]').forEach(b=>{b.onclick=()=>{tab=b.dataset.t;render()}});
+  if(deCaja&&!caja){$('#body').innerHTML=openCard();bindOpen();return}
+  ({panel:vPanel,inv:vInv,vender:vVender,gasto:vGasto,cerrar:vCerrar})[tab]();
 }
 
 /* ---------- Vender ---------- */
+const bajo=p=>p.stock<=(p.stock_minimo??0);
 function vVender(){
-  $('#body').innerHTML=`<div class="card"><input id="q" placeholder="Buscar o escanear código de barras" value="${esc(q)}" autocomplete="off"><div class="grid" id="pl"></div></div>
+  const low=prods.filter(bajo);
+  $('#body').innerHTML=(low.length?`<div class="card alert"><b>⚠ ${low.length} producto${low.length>1?'s':''} con stock bajo</b>
+    <div class="mu">${low.slice(0,6).map(p=>esc(p.nombre)+' ('+p.stock+')').join(' · ')}${low.length>6?' …':''}</div></div>`:'')+
+  `<div class="card"><input id="q" placeholder="Buscar o escanear código de barras" value="${esc(q)}" autocomplete="off"><div class="grid" id="pl"></div></div>
   <div class="card"><h2>Carrito</h2><div id="cl"></div></div>`;
   const input=$('#q');
   input.oninput=()=>{q=input.value;list()};
-  input.onkeydown=e=>{if(e.key!=='Enter')return;const t=q.trim().toLowerCase();
-    const hit=prods.find(p=>p.codigo_barras===q.trim())||(filtered().length===1&&filtered()[0]);
-    if(hit){add(hit);q='';input.value='';list()}};
+  input.addEventListener('keydown',e=>{if(e.key!=='Enter')return;
+    const hit=prods.find(p=>p.codigo_barras===q.trim())||(filtered().length===1?filtered()[0]:null);
+    if(hit){add(hit);q='';input.value='';list()}});
   list();cartView();
 }
 const filtered=()=>{const t=q.trim().toLowerCase();return prods.filter(p=>!t||p.nombre.toLowerCase().includes(t)||(p.codigo_barras||'').includes(t))};
 function list(){
-  $('#pl').innerHTML=filtered().slice(0,40).map(p=>`<button class="p" data-id="${p.id_producto}" ${p.stock<=0?'disabled':''}>${esc(p.nombre)}<small>${cop(p.precio_venta)} · stock ${p.stock}</small></button>`).join('')||'<span class="mu">Sin resultados</span>';
-  $('#pl').querySelectorAll('.p').forEach(b=>b.onclick=()=>add(prods.find(p=>p.id_producto==b.dataset.id)));
+  $('#pl').innerHTML=filtered().slice(0,40).map(p=>`<button class="p" data-id="${p.id_producto}" ${p.stock<=0?'disabled':''}>${esc(p.nombre)}<small>${cop(p.precio_venta)} · ${p.stock<=0?'<b class="er">agotado</b>':'stock '+p.stock+(bajo(p)?' · <b class="wa">bajo</b>':'')}</small></button>`).join('')||'<span class="mu">Sin resultados</span>';
+  $('#pl').querySelectorAll('.p').forEach(b=>{b.onclick=()=>add(prods.find(p=>p.id_producto==b.dataset.id))});
 }
 function add(p){const x=cart.get(p.id_producto)||{p,qty:0};if(x.qty>=p.stock){toast('No hay más stock de '+p.nombre,true);return}x.qty++;cart.set(p.id_producto,x);cartView()}
 const total=()=>[...cart.values()].reduce((s,x)=>s+x.qty*x.p.precio_venta,0);
@@ -125,8 +163,8 @@ function cartView(){
    <select id="mp"><option>Efectivo</option><option>Nequi</option><option>Daviplata</option><option>Bre-B</option><option>Tarjeta</option></select>
    <div id="efe"><input id="rec" type="number" inputmode="decimal" placeholder="Efectivo recibido"><div id="cam" class="mu"></div></div>
    <div class="row"><button class="g" id="vac">Vaciar</button><button class="sp" id="cob">Cobrar</button></div>`;
-  el.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{const x=cart.get(+b.dataset.m);x.qty--;if(x.qty<=0)cart.delete(+b.dataset.m);cartView()});
-  el.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>add(cart.get(+b.dataset.a).p));
+  el.querySelectorAll('[data-m]').forEach(b=>{b.onclick=()=>{const x=cart.get(+b.dataset.m);x.qty--;if(x.qty<=0)cart.delete(+b.dataset.m);cartView()}});
+  el.querySelectorAll('[data-a]').forEach(b=>{b.onclick=()=>add(cart.get(+b.dataset.a).p)});
   const sync=()=>{$('#efe').style.display=$('#mp').value==='Efectivo'?'block':'none';const r=Number($('#rec').value);
     $('#cam').innerHTML=r?(r>=total()?'Cambio: <b class="ok">'+cop(r-total())+'</b>':'<span class="er">Falta '+cop(total()-r)+'</span>'):''};
   $('#mp').onchange=sync;$('#rec').oninput=sync;sync();
@@ -139,13 +177,12 @@ function cartView(){
     if(r.data){cart.clear();q='';await refresh();recibo(r.data)}};
 }
 function recibo(v){
-  const m=document.createElement('div');m.className='modal';
-  m.innerHTML=`<div class="card"><h2 class="ok">Venta registrada</h2><div class="mu">Factura ${esc(v.numero_factura)}</div>
+  const m=modal(`<h2 class="ok">Venta registrada</h2><div class="mu">Factura ${esc(v.numero_factura)}</div>
    <div class="line"><span class="sp">Subtotal</span>${cop(v.subtotal)}</div><div class="line"><span class="sp">IVA incluido</span>${cop(v.impuestos)}</div>
    <div class="line"><span class="sp"><b>Total</b></span><b>${cop(v.total)}</b></div>
    ${v.metodo_pago==='Efectivo'?`<div class="line"><span class="sp">Recibido</span>${cop(v.monto_recibido)}</div><div class="line"><span class="sp"><b>Cambio</b></span><b class="ok">${cop(v.cambio)}</b></div>`:`<div class="line"><span class="sp">Pago</span>${esc(v.metodo_pago)}</div>`}
-   <button style="width:100%;margin-top:10px">Nueva venta</button></div>`;
-  m.querySelector('button').onclick=()=>m.remove();document.body.appendChild(m);
+   <button style="width:100%;margin-top:10px">Nueva venta</button>`);
+  m.querySelector('button').onclick=()=>m.remove();
 }
 
 /* ---------- Gasto ---------- */
@@ -169,17 +206,127 @@ function vCerrar(){
    <button id="cc" style="width:100%">Cerrar caja</button></div>`;
   $('#cc').onclick=async()=>{if(!confirm('¿Cerrar la caja? Ya no podrás vender en este turno.'))return;
     const r=await call('cerrar_caja',{p_monto_real:Number($('#real').value)});
-    if(r.data){const d=r.data.diferencia;cart.clear();tab='vender';caja=null;render();
-      app.insertAdjacentHTML('beforeend',`<div class="card"><h2>Caja cerrada</h2><p>Esperado ${cop(r.data.monto_cierre_esperado)} · Contado ${cop(r.data.monto_cierre_real)}</p>
-      <p class="${d===0?'ok':d<0?'er':'wa'}"><b>${d===0?'Cuadra al centavo':d<0?'Faltante de '+cop(-d):'Sobrante de '+cop(d)}</b></p></div>`)}};
+    if(r.data){const d=r.data.diferencia;cart.clear();tab=adm?'panel':'vender';await refresh();
+      const m=modal(`<h2>Caja cerrada</h2><p>Esperado ${cop(r.data.monto_cierre_esperado)} · Contado ${cop(r.data.monto_cierre_real)}</p>
+        <p class="${d===0?'ok':d<0?'er':'wa'}"><b>${d===0?'Cuadra al centavo':d<0?'Faltante de '+cop(-d):'Sobrante de '+cop(d)}</b></p><button style="width:100%">Entendido</button>`);
+      m.querySelector('button').onclick=()=>m.remove()}};
 }
 
-/* ---------- Inventario (solo administrador) ---------- */
+/* ---------- Inventario (administrador) ---------- */
+async function loadInv(){
+  const [i,c,s]=await Promise.all([
+    db.from('v_inventario_admin').select('*').order('sucursal').order('producto'),
+    db.from('categorias').select('id_categoria,nombre').order('nombre'),
+    db.from('sucursales').select('id_sucursal,nombre_sucursal').order('nombre_sucursal')]);
+  if(i.error){toast(i.error.message,true);return false}
+  invData=i.data||[];cats=c.data||[];sucs=s.data||[];
+  invAlertas=invData.filter(r=>r.en_alerta).length;setBadge();return true;
+}
 async function vInv(){
-  $('#body').innerHTML='<div class="card t"><h2>Inventario por sucursal</h2><div id="it">Cargando…</div></div>';
-  const {data,error}=await db.from('v_reporte_critico_inventario').select('*').order('stock');
-  if(error)return toast(error.message,true);
-  $('#it').innerHTML='<table><tr><th>Sucursal</th><th>Producto</th><th>Stock</th><th>Mín.</th><th></th></tr>'+data.map(r=>`<tr><td>${esc(r.sucursal)}</td><td>${esc(r.producto)}</td><td>${r.stock}</td><td>${r.stock_minimo}</td><td class="${r.stock<=r.stock_minimo?'er':'ok'}">${r.stock<=r.stock_minimo?'Reponer':'OK'}</td></tr>`).join('')+'</table>';
+  $('#body').innerHTML='<div class="card">Cargando inventario…</div>';
+  const ok=await loadInv();if(!ok||tab!=='inv')return;
+  $('#body').innerHTML=`<div class="card"><div class="row">
+    <input id="iq" class="sp" style="min-width:160px;margin:0" placeholder="Buscar producto o código" value="${esc(invQ)}">
+    <select id="is" style="width:auto;margin:0"><option value="">Todas las sedes</option>${sucs.map(s=>`<option value="${s.id_sucursal}" ${String(s.id_sucursal)===invSuc?'selected':''}>${esc(s.nombre_sucursal)}</option>`).join('')}</select>
+    <label style="margin:0"><input type="checkbox" id="ia" ${invSolo?'checked':''}>Solo alertas</label>
+    <button id="np" class="s">+ Producto</button></div></div>
+    <div class="card t" id="it"></div>`;
+  $('#iq').oninput=()=>{invQ=$('#iq').value;invList()};
+  $('#is').onchange=()=>{invSuc=$('#is').value;invList()};
+  $('#ia').onchange=()=>{invSolo=$('#ia').checked;invList()};
+  $('#np').onclick=nuevoProducto;
+  invList();
+}
+function invList(){
+  const t=invQ.trim().toLowerCase();
+  const rows=invData.filter(r=>(!invSuc||String(r.id_sucursal)===invSuc)&&(!invSolo||r.en_alerta)&&(!t||r.producto.toLowerCase().includes(t)||(r.codigo_barras||'').includes(t)))
+    .sort((a,b)=>(b.en_alerta-a.en_alerta)||a.sucursal.localeCompare(b.sucursal)||a.producto.localeCompare(b.producto));
+  const el=$('#it');
+  if(!rows.length){el.innerHTML='<span class="mu">No hay productos con ese filtro.</span>';return}
+  el.innerHTML='<table><tr><th>Producto</th><th>Sede</th><th class="n">Stock</th><th class="n">Mín.</th><th>Estado</th><th></th></tr>'+rows.map(r=>`<tr>
+    <td>${esc(r.producto)}<div class="mu">${esc(r.categoria||'Sin categoría')}${r.codigo_barras?' · '+esc(r.codigo_barras):''}</div></td>
+    <td>${esc(r.sucursal)}</td><td class="n"><b>${r.stock}</b></td><td class="n">${r.stock_minimo}</td>
+    <td>${r.en_alerta?(r.stock<=0?'<b class="er">Agotado</b>':'<b class="er">Reponer</b>'):'<span class="ok">OK</span>'}</td>
+    <td class="n"><button class="s" data-e="${r.id_inventario}">+ Entrada</button> <button class="g s" data-x="${r.id_inventario}">Editar</button></td></tr>`).join('')+'</table>';
+  const byId=id=>invData.find(r=>r.id_inventario==id);
+  el.querySelectorAll('[data-e]').forEach(b=>{b.onclick=()=>entrada(byId(b.dataset.e))});
+  el.querySelectorAll('[data-x]').forEach(b=>{b.onclick=()=>editarInv(byId(b.dataset.x))});
+}
+async function tras(r){ // recarga la lista tras un cambio
+  if(r.data){await loadInv();if(tab==='inv')invList()}
+}
+function entrada(r){
+  const m=modal(`<h2>Entrada de mercancía</h2><div class="mu">${esc(r.producto)} · ${esc(r.sucursal)} · stock actual ${r.stock}</div>
+    <input id="mq" type="number" inputmode="numeric" min="1" step="1" placeholder="Unidades que ingresan">
+    <div class="row"><button class="g sp" id="mc">Cancelar</button><button class="sp" id="mo">Registrar</button></div>`);
+  $('#mc').onclick=()=>m.remove();
+  $('#mo').onclick=async()=>{const n=parseInt($('#mq').value,10);if(!(n>0)){toast('Indica una cantidad mayor a cero',true);return}
+    const x=await call('ajustar_stock',{p_id_sucursal:r.id_sucursal,p_id_producto:r.id_producto,p_delta:n});
+    if(x.data){m.remove();toast('Entrada registrada: stock '+x.data.stock);await tras(x)}};
+}
+function editarInv(r){
+  const m=modal(`<h2>Editar inventario</h2><div class="mu">${esc(r.producto)} · ${esc(r.sucursal)}</div>
+    <label>Stock real (conteo físico)<input id="es" type="number" inputmode="numeric" min="0" step="1" value="${r.stock}"></label>
+    <label>Stock mínimo (alerta de recompra)<input id="em2" type="number" inputmode="numeric" min="0" step="1" value="${r.stock_minimo}"></label>
+    <div class="row"><button class="g sp" id="mc">Cancelar</button><button class="sp" id="mo">Guardar</button></div>`);
+  $('#mc').onclick=()=>m.remove();
+  $('#mo').onclick=async()=>{const s=parseInt($('#es').value,10),mi=parseInt($('#em2').value,10);
+    if(!(s>=0)||!(mi>=0)){toast('Los valores no pueden ser negativos',true);return}
+    const x=await call('ajustar_stock',{p_id_sucursal:r.id_sucursal,p_id_producto:r.id_producto,p_delta:s-r.stock,p_stock_minimo:mi});
+    if(x.data){m.remove();toast('Inventario actualizado');await tras(x)}};
+}
+function nuevoProducto(){
+  const m=modal(`<h2>Producto nuevo</h2>
+    <label>Nombre<input id="pn" placeholder="Ej: Jamón de cerdo x 250g"></label>
+    <div class="row"><label class="sp">Precio (IVA incluido)<input id="pp" type="number" inputmode="decimal" min="0"></label>
+      <label class="sp">IVA<select id="pi"><option value="19">19 %</option><option value="5">5 %</option><option value="0">0 %</option></select></label></div>
+    <label>Código de barras (opcional)<input id="pb"></label>
+    <label>Categoría<select id="pc"><option value="">Sin categoría</option>${cats.map(c=>`<option value="${c.id_categoria}">${esc(c.nombre)}</option>`).join('')}</select></label>
+    <label>Sede con stock inicial<select id="ps">${sucs.map(s=>`<option value="${s.id_sucursal}">${esc(s.nombre_sucursal)}</option>`).join('')}</select></label>
+    <div class="row"><label class="sp">Stock inicial<input id="pq" type="number" inputmode="numeric" min="0" value="0"></label>
+      <label class="sp">Stock mínimo<input id="pm" type="number" inputmode="numeric" min="0" value="5"></label></div>
+    <div class="row"><button class="g sp" id="mc">Cancelar</button><button class="sp" id="mo">Crear</button></div>`);
+  $('#mc').onclick=()=>m.remove();
+  $('#mo').onclick=async()=>{
+    const x=await call('crear_producto',{p_nombre:$('#pn').value,p_precio:Number($('#pp').value),p_iva:Number($('#pi').value),p_codigo_barras:$('#pb').value||null,
+      p_id_categoria:$('#pc').value?Number($('#pc').value):null,p_id_sucursal:Number($('#ps').value),p_stock:parseInt($('#pq').value,10)||0,p_stock_minimo:parseInt($('#pm').value,10)||0});
+    if(x.data){m.remove();toast('Producto creado');await tras(x)}};
+}
+
+/* ---------- Panel multisede (administrador) ---------- */
+async function vPanel(){
+  $('#body').innerHTML='<div class="card">Cargando panel…</div>';
+  const {data:p}=await call('panel_multisede',{p_dias:dias});
+  if(tab!=='panel')return;
+  if(!p){$('#body').innerHTML='<div class="card er">No se pudo cargar el panel.</div>';return}
+  const t=p.totales||{};
+  const maxD=Math.max(1,...(p.ventas_por_dia||[]).map(d=>Number(d.total)));
+  const n=(p.ventas_por_dia||[]).length;
+  const metodos=Object.entries(p.ventas_por_metodo||{}).sort((a,b)=>b[1]-a[1]);
+  const totM=metodos.reduce((s,x)=>s+Number(x[1]),0)||1;
+  const maxP=Math.max(1,...(p.top_productos||[]).map(x=>Number(x.total)));
+  $('#body').innerHTML=`
+  <div class="row" style="margin-bottom:12px"><h2 style="margin:0">Resumen del negocio</h2><span class="sp"></span>
+    <div class="chips">${[7,14,30].map(d=>`<button class="${dias===d?'':'g'} s" data-d="${d}">${d} días</button>`).join('')}<button class="g s" id="rf">Actualizar</button></div></div>
+  <div class="kpis">
+    <div><span class="mu">Ventas (${p.dias} días)</span><b>${cop(t.ventas)}</b><span class="mu">${t.num_ventas||0} ventas</span></div>
+    <div><span class="mu">Hoy</span><b>${cop(t.ventas_hoy)}</b><span class="mu">${t.num_ventas_hoy||0} ventas</span></div>
+    <div><span class="mu">Ticket promedio</span><b>${cop(t.ticket_promedio)}</b></div>
+    <div><span class="mu">Gastos de caja</span><b>${cop(p.gastos)}</b></div>
+    <div><span class="mu">Devoluciones</span><b>${cop(p.devoluciones)}</b></div></div>
+  <div class="sucs">${(p.sucursales||[]).map(s=>`<div class="card"><h2>${esc(s.nombre)}</h2>
+    <div class="line"><span class="sp mu">Hoy</span><b>${cop(s.ventas_hoy)}</b><span class="mu">${s.num_ventas_hoy} ventas</span></div>
+    <div class="line"><span class="sp mu">Últimos ${p.dias} días</span><b>${cop(s.ventas_periodo)}</b><span class="mu">${s.num_ventas_periodo} ventas</span></div>
+    <div style="padding:8px 0">${(s.cajas_abiertas||[]).length?s.cajas_abiertas.map(c=>`<div><span class="ok">● Caja abierta</span> · ${esc(c.empleado)}<div class="mu">Desde ${hora(c.desde)} · efectivo esperado ${cop(c.efectivo_esperado)}</div></div>`).join(''):'<span class="mu">○ Caja cerrada</span>'}</div>
+    ${s.productos_en_alerta?`<button class="g s" data-al="${s.id_sucursal}">⚠ ${s.productos_en_alerta} producto${s.productos_en_alerta>1?'s':''} en alerta de stock</button>`:'<span class="ok">Inventario en orden</span>'}</div>`).join('')}</div>
+  <div class="card"><h2>Ventas por día</h2><div class="bars">${(p.ventas_por_dia||[]).map((d,i)=>`<div class="col" title="${esc(ddmm(d.fecha))}: ${esc(cop(d.total))} (${d.num} ventas)"><i style="height:${Math.round(Number(d.total)/maxD*120)}px"></i><small>${n>14&&i%5!==0?'':ddmm(d.fecha)}</small></div>`).join('')}</div></div>
+  <div class="two"><div class="card"><h2>Ventas por método de pago</h2>${metodos.length?metodos.map(([k,v])=>`<div class="line"><span class="sp">${esc(k)}</span>${cop(v)}</div><div class="meter"><i style="width:${Math.round(v/totM*100)}%"></i></div>`).join(''):'<span class="mu">Sin ventas en el período</span>'}</div>
+    <div class="card"><h2>Productos más vendidos</h2>${(p.top_productos||[]).length?p.top_productos.map(x=>`<div class="line"><span class="sp">${esc(x.producto)}<div class="mu">${x.unidades} und</div></span>${cop(x.total)}</div><div class="meter"><i style="width:${Math.round(x.total/maxP*100)}%"></i></div>`).join(''):'<span class="mu">Sin ventas en el período</span>'}</div></div>
+  <div class="card ${(p.alertas_stock||[]).length?'alert':''}"><h2>Alertas de stock mínimo</h2>${(p.alertas_stock||[]).length?`<div class="t"><table><tr><th>Producto</th><th>Sede</th><th class="n">Stock</th><th class="n">Mín.</th></tr>${p.alertas_stock.map(a=>`<tr><td>${esc(a.producto)}</td><td>${esc(a.sucursal)}</td><td class="n"><b class="er">${a.stock}</b></td><td class="n">${a.stock_minimo}</td></tr>`).join('')}</table></div>`:'<span class="ok">Todo el inventario está sobre el mínimo.</span>'}</div>
+  <div class="card t"><h2>Turnos de caja recientes</h2>${(p.turnos_recientes||[]).length?`<table><tr><th>Sede</th><th>Cajero</th><th>Apertura</th><th>Estado</th><th class="n">Esperado</th><th class="n">Contado</th><th class="n">Diferencia</th></tr>${p.turnos_recientes.map(x=>`<tr><td>${esc(x.sucursal)}</td><td>${esc(x.empleado)}</td><td>${hora(x.apertura)}</td><td>${x.estado==='Abierta'?'<span class="ok">Abierta</span>':'Cerrada'}</td><td class="n">${cop(x.esperado)}</td><td class="n">${x.contado==null?'—':cop(x.contado)}</td><td class="n ${x.diferencia==null?'':x.diferencia===0?'ok':x.diferencia<0?'er':'wa'}">${x.diferencia==null?'—':x.diferencia===0?'Cuadra':cop(x.diferencia)}</td></tr>`).join('')}</table>`:'<span class="mu">Aún no hay turnos.</span>'}</div>`;
+  app.querySelectorAll('[data-d]').forEach(b=>{b.onclick=()=>{dias=+b.dataset.d;vPanel()}});
+  $('#rf').onclick=()=>{vPanel()};
+  app.querySelectorAll('[data-al]').forEach(b=>{b.onclick=()=>{invSuc=b.dataset.al;invSolo=true;invQ='';tab='inv';render()}});
 }
 init();
 </script></body></html>
