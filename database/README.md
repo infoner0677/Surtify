@@ -92,3 +92,7 @@ for f in tests/00_shim_supabase_local.sql 01_esquema.sql 02_funciones_y_triggers
 - Devolver una venta fiada baja la deuda del cliente (no sale efectivo). `resumen_sesion` y `reporte_contador` incluyen abonos y total por cobrar.
 - En la app: pestaña **Fiados** (clientes, saldo, estado de cuenta, abonos, recordatorio por WhatsApp), opción **Fiado** al cobrar y KPI "Por cobrar" en el panel del administrador.
 - Pruebas: `tests/40_pruebas_fiados.sql` (se revierte al final).
+
+## 09 · Listado de facturas
+- `v_facturas_recientes` ahora incluye sede, empleado, cliente y unidades (solo se añadieron columnas).
+- En la app: pestaña **Mis ventas** para el cajero (solo sus facturas) y **Facturas** para el administrador (todas las sedes, con filtros por periodo, sede, medio de pago y búsqueda por número, cliente o cajero). Tocar una factura muestra su detalle.

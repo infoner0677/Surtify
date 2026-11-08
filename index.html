@@ -96,7 +96,7 @@ async function boot(){
   if(!p.data){app.innerHTML='<div class="card"><h2>Usuario sin empleado</h2><p>Tu cuenta no está vinculada a un empleado activo.</p><button class="g" id="lo">Salir</button></div>';$('#lo').onclick=logout;return}
   perfil=p.data;adm=!!perfil.es_administrador;tab=adm?'panel':'vender';await refresh();
 }
-async function logout(){await db.auth.signOut();cart.clear();devSel=null;repR=null;cartera=[];carteraOk=false;metodoSel='Efectivo';cliSel='';caja=null;perfil=null;login()}
+async function logout(){await db.auth.signOut();cart.clear();devSel=null;repR=null;cartera=[];carteraOk=false;metodoSel='Efectivo';cliSel='';facPer='hoy';facSuc='';facQ='';facMet='';caja=null;perfil=null;login()}
 async function refresh(){
   caja=(await call('resumen_caja')).data;
   if(caja){const {data,error}=await db.from('v_productos_pos').select('*').order('nombre');if(error)toast(error.message,true);prods=data||[]}
@@ -120,8 +120,8 @@ function bindOpen(){
 function render(){
   const h=head();
   if(!adm&&!caja){app.innerHTML=h+openCard();$('#lo').onclick=logout;bindOpen();return}
-  const tabs=adm?[['panel','Panel'],['inv','Inventario'+(invAlertas?` <span class="badge">${invAlertas}</span>`:'')],['vender','Vender'],['fiados','Fiados'],['devolver','Devolver'],['gasto','Gasto'],['reporte','Reporte'],['cerrar','Cerrar caja']]
-                :[['vender','Vender'],['fiados','Fiados'],['devolver','Devolver'],['gasto','Gasto'],['reporte','Reporte'],['cerrar','Cerrar caja']];
+  const tabs=adm?[['panel','Panel'],['inv','Inventario'+(invAlertas?` <span class="badge">${invAlertas}</span>`:'')],['vender','Vender'],['facturas','Facturas'],['fiados','Fiados'],['devolver','Devolver'],['gasto','Gasto'],['reporte','Reporte'],['cerrar','Cerrar caja']]
+                :[['vender','Vender'],['facturas','Mis ventas'],['fiados','Fiados'],['devolver','Devolver'],['gasto','Gasto'],['reporte','Reporte'],['cerrar','Cerrar caja']];
   const deCaja=['vender','devolver','gasto','cerrar'].includes(tab);
   app.innerHTML=h+(caja&&deCaja?`<div class="stats">
     <div><span class="mu">Efectivo esperado</span><b>${cop(caja.monto_cierre_esperado)}</b></div>
@@ -131,7 +131,7 @@ function render(){
   $('#lo').onclick=logout;
   app.querySelectorAll('[data-t]').forEach(b=>{b.onclick=()=>{tab=b.dataset.t;render()}});
   if(deCaja&&!caja){$('#body').innerHTML=openCard();bindOpen();return}
-  ({panel:vPanel,inv:vInv,vender:vVender,fiados:vFiados,devolver:vDevolver,gasto:vGasto,reporte:vReporte,cerrar:vCerrar})[tab]();
+  ({panel:vPanel,inv:vInv,vender:vVender,facturas:vFacturas,fiados:vFiados,devolver:vDevolver,gasto:vGasto,reporte:vReporte,cerrar:vCerrar})[tab]();
 }
 
 /* ---------- Vender ---------- */
@@ -191,6 +191,43 @@ function recibo(v,cn){
    ${v.metodo_pago==='Efectivo'?`<div class="line"><span class="sp">Recibido</span>${cop(v.monto_recibido)}</div><div class="line"><span class="sp"><b>Cambio</b></span><b class="ok">${cop(v.cambio)}</b></div>`:v.metodo_pago==='Fiado'?`<div class="line"><span class="sp">Fiado a</span><b>${esc(cn||'cliente')}</b></div><div class="line"><span class="sp"><b>Debe en total</b></span><b class="wa">${cop(v.saldo_cliente)}</b></div>`:`<div class="line"><span class="sp">Pago</span>${esc(v.metodo_pago)}</div>`}
    <button style="width:100%;margin-top:10px">Nueva venta</button>`);
   m.querySelector('button').onclick=()=>m.remove();
+}
+
+/* ---------- Facturas (cajero: Mis ventas · administrador: todas las sedes) ---------- */
+async function vFacturas(){
+  if(adm&&!sucs.length){const {data}=await db.from('sucursales').select('id_sucursal,nombre_sucursal').order('id_sucursal');sucs=data||[]}
+  $('#body').innerHTML=`<div class="card"><h2>${adm?'Facturas':'Mis ventas'}</h2>
+   <div class="tabs" style="flex-wrap:wrap">${[['hoy','Hoy'],['ayer','Ayer'],['mes','Este mes'],['mesant','Mes anterior']].map(p=>`<button data-p="${p[0]}" class="${facPer===p[0]?'on':''}">${p[1]}</button>`).join('')}</div>
+   ${adm?`<select id="fs"><option value="">Todas las sedes</option>${sucs.map(x=>`<option value="${x.id_sucursal}" ${String(x.id_sucursal)===facSuc?'selected':''}>${esc(x.nombre_sucursal)}</option>`).join('')}</select>`:''}
+   <select id="fm"><option value="">Todos los medios de pago</option>${['Efectivo','Tarjeta','Transferencia','Fiado'].map(m=>`<option ${m===facMet?'selected':''}>${m}</option>`).join('')}</select>
+   <input id="fq" placeholder="Buscar por número, cliente${adm?' o cajero':''}" value="${esc(facQ)}">
+   <div id="fb"><span class="mu">Cargando…</span></div></div>`;
+  $('#body').querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{facPer=b.dataset.p;vFacturas()});
+  if(adm)$('#fs').onchange=e=>{facSuc=e.target.value;vFacturas()};
+  $('#fm').onchange=e=>{facMet=e.target.value;vFacturas()};
+  const [d,h]=((per)=>{const keep=repPer;repPer=per;const r=repRango();repPer=keep;return r})(facPer);
+  const ini=new Date(d+'T00:00:00-05:00').toISOString(),fin=new Date(new Date(h+'T00:00:00-05:00').getTime()+864e5).toISOString();
+  let qy=db.from('v_facturas_recientes').select('*').gte('fecha_emision',ini).lt('fecha_emision',fin).order('id_factura',{ascending:false}).limit(500);
+  if(!adm)qy=qy.eq('id_empleado',perfil.id_empleado);
+  if(adm&&facSuc)qy=qy.eq('id_sucursal',Number(facSuc));
+  if(facMet)qy=qy.eq('metodo_pago',facMet);
+  const {data,error}=await qy;if(error){toast(error.message,true);return}
+  const draw=()=>{
+    const t=facQ.trim().toLowerCase();
+    const L=(data||[]).filter(f=>!t||[f.numero_factura,f.cliente,f.cajero].some(x=>String(x||'').toLowerCase().includes(t)));
+    const tot=L.reduce((a,f)=>a+Number(f.total_facturado),0),dev=L.reduce((a,f)=>a+Number(f.devuelto),0);
+    $('#fb').innerHTML=(L.length?`<div class="line"><span class="sp"><b>${pl(L.length,'factura')}</b><div class="mu">${L.length>=500?'Se muestran las 500 más recientes. ':''}${dev>0?'Devuelto '+cop(dev):'Sin devoluciones'}</div></span><b>${cop(tot-dev)}</b></div>`:'')+
+     (L.length?L.map(f=>`<button class="g" data-f="${f.id_factura}" style="width:100%;text-align:left;margin-bottom:6px"><b>${esc(f.numero_factura)}</b> · ${cop(f.total_facturado)} · ${esc(f.metodo_pago)}${f.cliente?' · '+esc(f.cliente):''}<br><span class="mu">${hora(f.fecha_emision)}${adm?' · '+esc(f.sucursal)+' · '+esc(f.cajero||'—'):''} · ${f.unidades} ${Number(f.unidades)===1?'unidad':'unidades'}${Number(f.devuelto)>0?' · devuelto '+cop(f.devuelto):''}</span></button>`).join(''):'<span class="mu">No hay facturas en este periodo.</span>');
+    $('#fb').querySelectorAll('[data-f]').forEach(b=>b.onclick=async()=>{
+      const f=L.find(x=>String(x.id_factura)===b.dataset.f);const r=await call('devolucion_disponible',{p_id_factura:f.id_factura});if(!r.data)return;
+      const x=r.data;const m=modal(`<h2>${esc(x.numero_factura)}</h2><p class="mu">${hora(x.fecha_emision)} · ${esc(x.metodo_pago)}${f.cliente?' · '+esc(f.cliente):''}${adm?' · '+esc(f.sucursal)+' · '+esc(f.cajero||'—'):''}</p>`+
+       x.lineas.map(l=>`<div class="line"><span class="sp">${esc(l.nombre)}<div class="mu">${l.vendida} × ${cop(l.precio)}${l.devuelta?' · devueltas '+l.devuelta:''}</div></span>${cop(l.vendida*l.precio)}</div>`).join('')+
+       `<div class="line"><span class="sp"><b>Total</b></span><b>${cop(x.total)}</b></div>${Number(f.devuelto)>0?`<div class="line"><span class="sp">Devuelto</span>${cop(f.devuelto)}</div>`:''}
+        <button class="g" id="fx" style="width:100%;margin-top:8px">Cerrar</button>`);
+      m.querySelector('#fx').onclick=()=>m.remove()});
+  };
+  draw();
+  $('#fq').oninput=e=>{facQ=e.target.value;draw()};
 }
 
 /* ---------- Fiados (cuentas por cobrar) ---------- */
@@ -271,6 +308,7 @@ async function vDevolver(){
 
 /* ---------- Reporte para el contador ---------- */
 let repR=null,repPer='hoy',repSuc='';
+let facPer='hoy',facSuc='',facQ='',facMet='';
 function bogota(d){return new Date(d.getTime()-5*3600e3).toISOString().slice(0,10)}
 function repRango(){
   const hoy=new Date(),h=bogota(hoy);
