@@ -24,3 +24,4 @@ Surtify es una aplicación web instalable: `manifest.webmanifest`, `sw.js` e íc
 - **Autoservicio sin comisión (Bre-B):** la tienda puede cobrar a su llave Bre-B: el cliente sube la captura y la referencia, la venta queda *por verificar* y el dueño la concilia en la pestaña **Autoservicio**. Los clientes de confianza pueden **fiar** entrando con Google (celular + autorización de datos, aprobación y cupo del dueño). Requiere activar el proveedor Google en Supabase Auth.
 - Al cambiar `index.html`, sube la versión `V` en `sw.js` si quieres forzar la renovación de la copia guardada.
 - **Carga masiva por Excel:** en Inventario, el administrador descarga una plantilla, sube su lista de productos (xlsx/CSV), revisa el resumen con errores por fila y confirma. Reimportar actualiza precios sin pisar el stock.
+- Plantilla pública para el tendero (con instrucciones): https://infoner0677.github.io/Surtify/assets/plantilla_productos_surtify.xlsx

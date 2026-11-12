@@ -90,7 +90,8 @@ function login(){
   app.innerHTML=`<div class="login"><div class="card"><img class="logo-l" src="assets/logo.png" alt="Surtify"><p class="mu" style="text-align:center">Caja registradora simple</p>
   <label>Correo<input id="em" type="email" autocomplete="username"></label>
   <label>Contraseña<input id="pw" type="password" autocomplete="current-password"></label>
-  <button id="go" style="width:100%">Entrar</button><button class="g s" id="ins" hidden style="width:100%;margin-top:8px">Instalar app en este dispositivo</button></div></div>`;
+  <button id="go" style="width:100%">Entrar</button><button class="g s" id="ins" hidden style="width:100%;margin-top:8px">Instalar app en este dispositivo</button>
+  <p class="mu" style="text-align:center;margin:12px 0 0">¿Vas a cargar tu lista de productos? <a href="assets/plantilla_productos_surtify.xlsx" download>Descarga la plantilla de Excel</a> (trae las instrucciones).</p></div></div>`;
   const go=async()=>{
     const {error}=await db.auth.signInWithPassword({email:$('#em').value.trim(),password:$('#pw').value});
     if(error){toast('Correo o contraseña incorrectos',true)}else{boot()}};
