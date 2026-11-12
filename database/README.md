@@ -101,3 +101,10 @@ for f in tests/00_shim_supabase_local.sql 01_esquema.sql 02_funciones_y_triggers
 - `10`: corrige el dígito verificador EAN-13 de los códigos de la demo (para el escáner de cámara).
 - `11`: `sugerencias_compra(p_dias, p_cobertura, p_entrega)` (solo administrador). Con las ventas netas de los últimos `p_dias` días (facturas − devoluciones) calcula por producto y sede el promedio diario, cuántos días alcanza el stock, la fecha ideal de pedido y la cantidad sugerida = ceil(promedio × (entrega + cobertura)) − stock. Marca **Urgente** (se acaba antes de que llegue el pedido o está agotado) y **Pronto**. Si el negocio lleva menos de `p_dias` días vendiendo, usa los días reales.
 - En la app (administrador): pestaña **Compras** (con globo de urgentes), aviso en el Panel, ajuste de días de entrega y cobertura, y envío del pedido por WhatsApp o copiado.
+
+## 12 · Comprobantes de pago
+- Bucket **privado** `comprobantes` (solo JPG/PNG/WebP, máx. 3 MB) y tabla `comprobantes_pago` (una foto por fila, ligada a una factura **o** a un abono de fiado).
+- `adjuntar_comprobante(p_id_factura, p_id_movimiento, p_ruta)`: valida que la ruta sea de la carpeta del comercio (`{id_comercio}/archivo`), que la imagen exista y que el usuario pueda ver esa factura/abono.
+- Evidencia inmutable: nadie puede actualizar ni borrar comprobantes. Subir solo a la carpeta del propio comercio; leer una foto solo si el usuario ve su comprobante (la sede del cajero, o todas para el administrador). Las fotos se abren con enlaces firmados de 5 minutos.
+- `registrar_abono` ahora devuelve también `id_movimiento`; `v_facturas_recientes` añade `n_comprobantes` al final.
+- En la app: botón **📎 Adjuntar foto del comprobante** al cobrar con Nequi/Daviplata/Bre-B/Tarjeta, al recibir un abono digital y en el detalle de la factura; el listado marca ⚠ *sin comprobante* y se puede filtrar. La foto se comprime en el celular (~100–300 KB) antes de subirse.

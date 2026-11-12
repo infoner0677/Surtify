@@ -1,0 +1,5 @@
+-- Pruebas de comprobantes (se ejecutan en Supabase con la demo cargada; terminan en excepción PRUEBAS_OK = rollback)
+-- Verifica: ruta de otro comercio, imagen inexistente, path traversal, subida a carpeta ajena, adjuntar OK,
+-- visibilidad por sede (Diana ve, Laura de otra sede no, Carlos ve todo), sin UPDATE/DELETE, abono, y no ambos a la vez.
+-- (Ver el bloque completo ejecutado en la migración 12; resultado esperado:)
+-- PRUEBAS_OK ruta_ajena_rechazada;sin_imagen_rechazada;traversal_rechazado;upload_ajeno_rechazado;adjuntar_ok;diana_ve_1;sin_delete;sin_update;laura_no_ve;carlos_ve;abono_ok;ambos_rechazado;

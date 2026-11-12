@@ -104,3 +104,18 @@ begin
   return jsonb_build_object('id_movimiento', v_mov, 'id_cliente', p_id_cliente, 'nombre', v_cli.nombre, 'telefono', v_cli.telefono,
     'abono', p_monto, 'saldo_anterior', v_saldo, 'saldo_nuevo', v_saldo - p_monto, 'metodo_pago', p_metodo_pago, 'caja', app.resumen_sesion(v_ses));
 end $$;
+
+-- Listado de facturas: cuántos comprobantes tiene cada una (columna añadida AL FINAL)
+create or replace view v_facturas_recientes with (security_invoker = true) as
+select f.id_factura, f.numero_factura, f.fecha_emision, f.total_facturado, f.metodo_pago,
+       s.nombre_sucursal as sucursal, e.nombre as cajero,
+       coalesce((select sum(nc.total_reversado) from notas_credito nc where nc.id_factura = f.id_factura), 0) as devuelto,
+       p.id_sucursal, p.id_empleado, c.nombre as cliente,
+       coalesce((select sum(df.cantidad) from detalles_factura df where df.id_factura = f.id_factura), 0)::int as unidades,
+       (select count(*) from comprobantes_pago cp where cp.id_factura = f.id_factura)::int as n_comprobantes
+  from facturas f
+  join pedidos p on p.id_pedido = f.id_pedido
+  join sucursales s on s.id_sucursal = p.id_sucursal
+  left join empleados e on e.id_empleado = p.id_empleado
+  left join clientes c on c.id_cliente = p.id_cliente;
+grant select on v_facturas_recientes to authenticated;
