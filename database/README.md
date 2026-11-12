@@ -108,3 +108,10 @@ for f in tests/00_shim_supabase_local.sql 01_esquema.sql 02_funciones_y_triggers
 - Evidencia inmutable: nadie puede actualizar ni borrar comprobantes. Subir solo a la carpeta del propio comercio; leer una foto solo si el usuario ve su comprobante (la sede del cajero, o todas para el administrador). Las fotos se abren con enlaces firmados de 5 minutos.
 - `registrar_abono` ahora devuelve también `id_movimiento`; `v_facturas_recientes` añade `n_comprobantes` al final.
 - En la app: botón **📎 Adjuntar foto del comprobante** al cobrar con Nequi/Daviplata/Bre-B/Tarjeta, al recibir un abono digital y en el detalle de la factura; el listado marca ⚠ *sin comprobante* y se puede filtrar. La foto se comprime en el celular (~100–300 KB) antes de subirse.
+
+## 13 · Autoservicio con pasarela de pago
+- Sede con `autoservicio = true` (demo: *Autoservicio Centro*). El cliente **no tiene cuenta**: usa `autoservicio.html?s=<id_sucursal>` con la clave anon.
+- Solo 3 funciones son públicas: `autoservicio_catalogo` (productos con stock), `autoservicio_crear_pago` (precios e IVA **siempre** del servidor; el navegador no puede cambiarlos) y `autoservicio_estado` (el cliente consulta con su `id_pago`, un UUID no adivinable).
+- `autoservicio_confirmar_pago` solo la puede ejecutar la **clave de servicio** (Edge Function). Crea pedido, factura y descuenta stock **solo cuando la pasarela confirma**. Es idempotente (webhooks repetidos no venden dos veces), acepta un pago aprobado aunque el cobro haya vencido, y si el producto se agotó mientras pagaba deja el pago como `Pago sin venta` (para reembolso) sin tocar inventario ni consecutivo.
+- Tabla `pagos_autoservicio` (estados: Pendiente, Aprobado, Rechazado, Vencido, Pago sin venta) con RLS: el personal solo ve su sede; el administrador, todas. `v_facturas_recientes` añade `ref_pasarela` y muestra *Autoservicio* como cajero.
+- Edge Function `supabase/functions/pasarela-simulada`: **simula** la pasarela (sin dinero real). Para producción se reemplaza por un webhook que verifique la firma del proveedor (Wompi, ePayco…) y llame a la misma función de confirmación.

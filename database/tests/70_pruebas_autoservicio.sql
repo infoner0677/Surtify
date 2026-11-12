@@ -1,0 +1,6 @@
+-- Pruebas de autoservicio (ejecutadas en Supabase; terminan en excepción PRUEBAS_OK = rollback)
+-- Resultado esperado:
+-- PRUEBAS_OK catalogo;sede_normal_rechazada;vacio_rechazado;cant_100_rechazada;precio_servidor;anon_no_confirma;anon_no_lee_tabla;aprobado;stock_descontado;idempotente;estado_aprobado;rechazado;carrera_stock_sin_venta;vencido_aprobado;consecutivo_ok;personal_ok;panel_reporte_ok;
+-- Cubre: anon solo catálogo/crear/estado; precio del cliente ignorado; confirmación solo service_role; idempotencia;
+-- dos clientes pagando el último stock (el segundo queda 'Pago sin venta' sin descontar ni gastar consecutivo);
+-- pago aprobado tras vencer; visibilidad por sede; panel y reporte con ventas sin cajero.

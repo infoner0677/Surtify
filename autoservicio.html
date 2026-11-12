@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="es"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b7a5a">
+<title>Surtify · Autoservicio</title>
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<style>
+:root{color-scheme:light dark;--bg:#f4f6f8;--card:#fff;--tx:#18202a;--mu:#667085;--pr:#0b7a5a;--on:#fff;--bd:#e2e6ea;--er:#b42318;--ok:#067647;--wa:#b54708;--wab:#fffaeb}
+@media(prefers-color-scheme:dark){:root{--bg:#10151b;--card:#19202a;--tx:#edf0f3;--mu:#98a2b3;--pr:#2fb386;--on:#06241a;--bd:#2a323d;--er:#f97066;--ok:#47cd89;--wa:#fdb022;--wab:#2a2110}}
+*{box-sizing:border-box}html,body{margin:0}
+body{background:var(--bg);color:var(--tx);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0)}
+.w{max-width:980px;margin:0 auto;padding:12px}
+h1{font-size:1.15rem;margin:0}h2{font-size:1.05rem;margin:0 0 8px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px;margin-bottom:12px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.sp{flex:1}
+.mu{color:var(--mu);font-size:.86rem}.er{color:var(--er)}.ok{color:var(--ok)}.wa{color:var(--wa)}
+input,select{width:100%;padding:12px;border:1px solid var(--bd);border-radius:10px;background:var(--bg);color:var(--tx);font:inherit;margin:4px 0 8px}
+input[type=checkbox]{width:auto;margin:0 6px 0 0}
+label{display:block;font-size:.9rem}
+button{font:inherit;border:0;border-radius:10px;padding:12px 16px;background:var(--pr);color:var(--on);font-weight:600;cursor:pointer}
+button.g{background:transparent;color:var(--tx);border:1px solid var(--bd)}button.s{padding:6px 12px}button:disabled{opacity:.5}
+[hidden]{display:none!important}
+.off{position:sticky;top:0;z-index:5;background:var(--wab);color:var(--wa);border-bottom:1px solid var(--bd);padding:8px 12px;text-align:center;font-size:.9rem}
+.hd{display:flex;align-items:center;gap:8px;margin:2px 0 4px}.logo{height:38px;width:auto;display:block}.who{margin:0 0 12px}
+.login{max-width:420px;margin:9vh auto 0}.logo-l{display:block;width:min(260px,70%);height:auto;margin:6px auto 4px}
+.tabs{display:flex;gap:6px;margin:12px 0;overflow-x:auto}.tabs button{background:var(--card);color:var(--tx);border:1px solid var(--bd);white-space:nowrap}
+.tabs button.on{background:var(--pr);color:var(--on);border-color:var(--pr)}
+.badge{display:inline-block;min-width:20px;padding:0 6px;border-radius:10px;background:var(--er);color:#fff;font-size:.75rem;line-height:20px;text-align:center;margin-left:4px}
+.stats,.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.kpis{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:12px}
+.stats div,.kpis div{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:10px}
+.stats b,.kpis b{display:block;font-size:1.05rem}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:12px}.two .card{margin:0}.two{margin-bottom:12px}
+.sucs{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-bottom:12px}.sucs .card{margin:0}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;max-height:260px;overflow:auto}
+.p{background:var(--bg);color:var(--tx);border:1px solid var(--bd);text-align:left;font-weight:500}.p small{display:block;color:var(--mu);font-weight:400}
+.line{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--bd)}.line:last-child{border:0}
+.tot{font-size:1.4rem;font-weight:700}
+.alert{background:var(--wab);border-color:var(--wa)}
+.t{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:.9rem}td,th{padding:7px 6px;border-bottom:1px solid var(--bd);text-align:left;vertical-align:middle}th{color:var(--mu);font-weight:600;white-space:nowrap}
+td.n,th.n{text-align:right;white-space:nowrap}
+.bars{display:flex;align-items:flex-end;gap:4px}.col{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:150px}
+.col i{display:block;width:100%;background:var(--pr);border-radius:4px 4px 0 0;min-height:2px}.col small{font-size:.65rem;color:var(--mu);height:14px;white-space:nowrap}
+.meter{height:8px;border-radius:4px;background:var(--bd);margin:3px 0 8px;overflow:hidden}.meter i{display:block;height:100%;background:var(--pr)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}.chips button{padding:6px 12px}
+#toast{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0));background:var(--tx);color:var(--bg);padding:12px;border-radius:10px;display:none;z-index:99}
+.modal{position:fixed;inset:0;background:#0009;display:flex;align-items:center;justify-content:center;padding:16px;z-index:50}.modal .card{max-width:440px;width:100%;margin:0;max-height:92vh;overflow:auto}
+</style>
+<style>
+.big{width:100%;font-size:1.05rem;padding:14px}
+.qty{display:flex;align-items:center;gap:6px}.qty button{padding:4px 12px;font-size:1.1rem}.qty b{min-width:22px;text-align:center}
+.sim{border:2px dashed var(--wa);background:var(--wab)}
+.meth{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin:8px 0}
+.meth button{background:var(--card);color:var(--tx);border:1px solid var(--bd)}.meth button.on{background:var(--pr);color:var(--on);border-color:var(--pr)}
+.check{font-size:3rem;text-align:center;line-height:1}
+</style></head>
+<body><div class="w" id="app"></div><div id="toast"></div>
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+const $=s=>document.querySelector(s), app=$('#app');
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const cop=n=>new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0}).format(n||0);
+const fechaLarga=x=>new Date(x).toLocaleString('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+function toast(m,bad){const t=$('#toast');t.textContent=m;t.style.background=bad?'var(--er)':'var(--tx)';t.style.color=bad?'#fff':'var(--bg)';t.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(()=>{t.style.display='none'},4500)}
+function modal(html){
+  const m=document.createElement('div');m.className='modal';m.innerHTML='<div class="card">'+html+'</div>';
+  m.addEventListener('mousedown',e=>{if(e.target===m)m.remove()});document.body.appendChild(m);return m;
+}
+
+
+const ZXING_URL='https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js';
+let zxingP=null;
+const cargarZXing=()=>window.ZXing?Promise.resolve():(zxingP||(zxingP=new Promise((ok,no)=>{const s=document.createElement('script');s.src=ZXING_URL;s.onload=ok;s.onerror=()=>{zxingP=null;no(new Error('No se pudo cargar el lector (¿sin internet?)'))};document.head.appendChild(s)})));
+function pitido(){try{const A=window.AudioContext||window.webkitAudioContext,c=new A(),o=c.createOscillator(),g=c.createGain();o.frequency.value=880;g.gain.value=.08;o.connect(g);g.connect(c.destination);o.start();setTimeout(()=>{o.stop();c.close()},110)}catch(e){}try{navigator.vibrate&&navigator.vibrate(60)}catch(e){}}
+async function camara(o){
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){toast('Este navegador no permite usar la cámara. Escribe el código a mano.',true);return null}
+  const m=modal(`<h2>${o.titulo||'Escanear código de barras'}</h2><p class="mu">${o.ayuda||'Apunta la cámara al código de barras o QR del producto.'}</p>
+    <video id="sv" playsinline muted autoplay style="width:100%;max-height:${o.extra?'32vh':'50vh'};border-radius:10px;background:#000;object-fit:cover"></video>
+    ${o.extra||''}${o.botones||'<button id="sx" style="width:100%;margin-top:8px">Listo</button>'}`);
+  const v=m.querySelector('#sv');let stop=false,stream=null,reader=null,ultimo='',tUlt=0;
+  const cerrar=()=>{if(stop)return;stop=true;try{reader&&reader.reset()}catch(e){}try{stream&&stream.getTracks().forEach(t=>t.stop())}catch(e){}m.remove();o.alCerrar&&o.alCerrar()};
+  const sx=m.querySelector('#sx');if(sx)sx.onclick=cerrar;
+  m.addEventListener('mousedown',e=>{if(e.target===m&&!o.noFuera)cerrar()});
+  const alLeer=cod=>{
+    cod=String(cod||'').trim();if(!cod||stop)return;
+    const t=Date.now();if(cod===ultimo&&t-tUlt<1200){tUlt=t;return} // mismo código aún frente a la cámara: no repetir
+    ultimo=cod;tUlt=t;
+    if(o.alLeer(cod,cerrar)===true)cerrar();
+  };
+  const fallo=e=>{cerrar();toast(e&&e.name==='NotAllowedError'?'Permiso de cámara denegado. Actívalo en el navegador o escribe el código.':(e&&e.message)||'No se pudo abrir la cámara',true)};
+  (async()=>{try{
+    if('BarcodeDetector' in window){
+      const det=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e','code_128','code_39','qr_code']});
+      stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
+      if(stop){stream.getTracks().forEach(t=>t.stop());return}
+      v.srcObject=stream;await v.play().catch(()=>{});
+      const ciclo=async()=>{if(stop)return;try{if(v.readyState>=2){const r=await det.detect(v);if(r&&r[0])alLeer(r[0].rawValue)}}catch(e){}setTimeout(ciclo,200)};ciclo();
+    }else{
+      await cargarZXing();if(stop)return;
+      const Z=window.ZXing,h=new Map();h.set(Z.DecodeHintType.POSSIBLE_FORMATS,[Z.BarcodeFormat.EAN_13,Z.BarcodeFormat.EAN_8,Z.BarcodeFormat.UPC_A,Z.BarcodeFormat.UPC_E,Z.BarcodeFormat.CODE_128,Z.BarcodeFormat.CODE_39,Z.BarcodeFormat.QR_CODE]);
+      reader=new Z.BrowserMultiFormatReader(h,150);
+      await reader.decodeFromConstraints({video:{facingMode:{ideal:'environment'}},audio:false},v,r=>{if(r)alLeer(r.getText())});
+    }
+  }catch(e){fallo(e)}})();
+  return {m,cerrar};
+}
+
+/* ---------- Autoservicio: el cliente escanea, paga en la pasarela y recibe su comprobante (sin cuenta, sin app) ---------- */
+const SEDE=Number(new URLSearchParams(location.search).get('s'));
+let db,tienda=null,cart=new Map(),pago=null,metodo='Nequi',busy=false,verQ='';
+const store={get(){try{return sessionStorage.getItem('surtify_pago')}catch(e){return null}},set(v){try{v?sessionStorage.setItem('surtify_pago',v):sessionStorage.removeItem('surtify_pago')}catch(e){}}};
+const unidades=()=>[...cart.values()].reduce((a,x)=>a+x.qty,0);
+const total=()=>[...cart.values()].reduce((a,x)=>a+x.qty*x.p.precio,0);
+const cab=()=>`<div class="hd"><img class="logo" src="assets/logo.png" alt="Surtify"><span class="sp"></span></div><div class="mu who">${esc(tienda.comercio)} · ${esc(tienda.sucursal)} · Autoservicio</div>`;
+async function rpc(fn,args){const {data,error}=await db.rpc(fn,args||{});if(error){toast(error.message,true);return null}return data}
+
+async function init(){
+  const c=window.SURTIFY||{};
+  if(!SEDE){app.innerHTML='<div class="card"><h2>Falta la tienda</h2><p>Escanea el código QR que está en la entrada de la tienda.</p></div>';return}
+  db=supabase.createClient(c.SUPABASE_URL,c.SUPABASE_ANON_KEY);
+  tienda=await rpc('autoservicio_catalogo',{p_sucursal:SEDE});
+  if(!tienda){app.innerHTML='<div class="card"><h2>Tienda no disponible</h2><p class="mu">Esta tienda no tiene autoservicio o el enlace no es correcto.</p></div>';return}
+  const prev=store.get();
+  if(prev){const e=await rpc('autoservicio_estado',{p_id_pago:prev});
+    if(e&&e.estado==='Aprobado'){return comprobante(e)}
+    if(e&&e.estado==='Pendiente'){pago={id_pago:prev,referencia:e.referencia,total:e.total};return pasarela()}
+    store.set(null)}
+  vCarrito();
+}
+
+function add(p){const x=cart.get(p.id_producto);
+  if(x){if(x.qty>=p.stock){toast(p.nombre+': solo quedan '+p.stock,true);return false}x.qty++}else cart.set(p.id_producto,{p,qty:1});return true}
+function vCarrito(){
+  const T=total();
+  app.innerHTML=cab()+`<div class="card"><h2>Tu compra</h2>
+    <button class="big" id="sc">📷 Escanear productos</button>
+    <div class="row" style="margin-top:8px"><input id="cod" class="sp" inputmode="numeric" placeholder="O escribe el código de barras" style="margin:0"><button class="g" id="ca">Agregar</button></div>
+    <details style="margin-top:8px"><summary class="mu">Ver todos los productos</summary>
+      <input id="bq" placeholder="Buscar…" value="${esc(verQ)}"><div class="grid" id="lp"></div></details></div>
+    <div class="card"><h2>Carrito (${unidades()})</h2>${cart.size?[...cart.values()].map(x=>`<div class="line"><span class="sp">${esc(x.p.nombre)}<div class="mu">${cop(x.p.precio)} c/u</div></span>
+      <span class="qty"><button class="g s" data-m="${x.p.id_producto}">−</button><b>${x.qty}</b><button class="g s" data-a="${x.p.id_producto}">+</button></span><b style="min-width:84px;text-align:right">${cop(x.qty*x.p.precio)}</b></div>`).join(''):'<span class="mu">Escanea un producto para empezar.</span>'}
+      <div class="line"><span class="sp"><b>Total</b><div class="mu">IVA incluido</div></span><span class="tot">${cop(T)}</span></div>
+      <button class="big" id="pg" ${cart.size?'':'disabled'}>Pagar ${cart.size?cop(T):''}</button></div>`;
+  const porId=id=>tienda.productos.find(p=>p.id_producto===Number(id));
+  const lista=()=>{const t=verQ.trim().toLowerCase();$('#lp').innerHTML=tienda.productos.filter(p=>!t||p.nombre.toLowerCase().includes(t)).map(p=>`<button class="p" data-p="${p.id_producto}">${esc(p.nombre)}<small>${cop(p.precio)}</small></button>`).join('')||'<span class="mu">Sin resultados</span>';
+    $('#lp').querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{if(add(porId(b.dataset.p)))vCarrito()})};
+  lista();$('#bq').oninput=e=>{verQ=e.target.value;lista()};
+  const porCodigo=cod=>tienda.productos.find(p=>p.codigo_barras===String(cod).trim());
+  $('#ca').onclick=()=>{const c=$('#cod').value;const p=porCodigo(c);if(!p){toast('Código no encontrado en esta tienda',true);return}if(add(p))vCarrito()};
+  $('#cod').addEventListener('keydown',e=>{if(e.key==='Enter')$('#ca').click()});
+  $('#sc').onclick=()=>camara({titulo:'Escanear producto',ayuda:'Apunta al código de barras. Puedes escanear varios seguidos.',
+    extra:`<div class="line" style="margin-top:8px"><span class="sp mu">Carrito: <b id="sn">${unidades()}</b> unidades</span></div>`,
+    alCerrar:()=>vCarrito(),
+    alLeer:cod=>{const p=porCodigo(cod);if(!p){toast('Código '+cod+' no registrado',true);return}
+      if(add(p)){pitido();toast('✓ '+p.nombre);const n=document.getElementById('sn');if(n)n.textContent=unidades()}}});
+  app.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{if(add(porId(b.dataset.a)))vCarrito()});
+  app.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{const x=cart.get(Number(b.dataset.m));x.qty--;if(x.qty<=0)cart.delete(x.p.id_producto);vCarrito()});
+  $('#pg').onclick=async e=>{if(busy)return;busy=true;e.target.disabled=true;
+    const r=await rpc('autoservicio_crear_pago',{p_sucursal:SEDE,p_items:[...cart.values()].map(x=>({id_producto:x.p.id_producto,cantidad:x.qty}))});
+    busy=false;if(!r){e.target.disabled=false;return}
+    pago=r;store.set(r.id_pago);pasarela()};
+}
+
+/* Pantalla de la pasarela. Con una pasarela real (Wompi, etc.) aquí se redirige al checkout del proveedor;
+   el aviso de pago llega al servidor por webhook y esta página solo consulta el estado. */
+function pasarela(){
+  app.innerHTML=cab()+`<div class="card sim"><h2>🧪 Pasarela de pruebas</h2><p class="mu">Simulación: no se cobra dinero real. Así se vería el pago con Nequi, PSE, Bre-B o tarjeta.</p>
+    <div class="line"><span class="sp">Referencia</span><b>${esc(pago.referencia)}</b></div>
+    <div class="line"><span class="sp"><b>Total a pagar</b></span><span class="tot">${cop(pago.total)}</span></div>
+    <div class="mu">Medio de pago</div><div class="meth">${['Nequi','Daviplata','Bre-B','PSE','Tarjeta'].map(m=>`<button data-me="${m}" class="${m===metodo?'on':''}">${m}</button>`).join('')}</div>
+    <button class="big" id="ok">Simular pago aprobado</button>
+    <button class="g big" id="no" style="margin-top:8px">Simular pago rechazado</button>
+    <button class="g" id="cx" style="width:100%;margin-top:8px">Cancelar y volver al carrito</button></div>`;
+  app.querySelectorAll('[data-me]').forEach(b=>b.onclick=()=>{metodo=b.dataset.me;pasarela()});
+  $('#cx').onclick=()=>{store.set(null);pago=null;vCarrito()};
+  const enviar=async res=>{if(busy)return;busy=true;$('#ok').disabled=$('#no').disabled=true;
+    const {data,error}=await db.functions.invoke('pasarela-simulada',{body:{id_pago:pago.id_pago,resultado:res,metodo}});
+    busy=false;
+    if(error||!data||data.error){let m=(data&&data.error)||(error&&error.message)||'No se pudo contactar la pasarela';
+      try{if(error&&error.context&&error.context.json){const j=await error.context.json();if(j&&j.error)m=j.error}}catch(e){}
+      toast(m,true);$('#ok').disabled=$('#no').disabled=false;return}
+    resultado();};
+  $('#ok').onclick=()=>enviar('aprobado');$('#no').onclick=()=>enviar('rechazado');
+}
+/* El estado real SIEMPRE se consulta al servidor (no se confía en lo que diga el navegador) */
+async function resultado(){
+  app.innerHTML=cab()+'<div class="card"><h2>Confirmando tu pago…</h2><p class="mu">Un momento, estamos esperando la respuesta de la pasarela.</p></div>';
+  let e=null;
+  for(let i=0;i<8;i++){e=await rpc('autoservicio_estado',{p_id_pago:pago.id_pago});if(!e||e.estado!=='Pendiente')break;await new Promise(r=>setTimeout(r,1500))}
+  if(!e){return pasarela()}
+  if(e.estado==='Aprobado'){cart.clear();store.set(null);return comprobante(e)}
+  if(e.estado==='Pago sin venta'){store.set(null);cart.clear();app.innerHTML=cab()+`<div class="card alert"><h2 class="wa">Revisa con el personal</h2><p>${esc(e.nota||'')}</p><p class="mu">Referencia ${esc(e.referencia)} · ${esc(e.ref_externa||'')}</p></div>`;return}
+  if(e.estado==='Rechazado'||e.estado==='Vencido'){store.set(null);pago=null;
+    app.innerHTML=cab()+`<div class="card"><h2 class="er">${e.estado==='Rechazado'?'Pago rechazado':'El pago venció'}</h2><p>No se te cobró nada. Tu carrito sigue ahí para que lo intentes otra vez.</p><button class="big" id="rt">Volver al carrito</button></div>`;
+    $('#rt').onclick=vCarrito;return}
+  pasarela();
+}
+function comprobante(e){
+  const wa='https://wa.me/?text='+encodeURIComponent([`*${e.comercio}*`,`Comprobante de venta ${e.numero_factura}`,fechaLarga(e.fecha_emision)+' · '+e.sucursal,'',
+    ...e.lineas.map(l=>`${l.cantidad} × ${l.nombre} — ${cop(l.cantidad*l.precio)}`),'',`*Total: ${cop(e.total)}* (IVA incluido)`,`Pago: ${e.metodo_pago} · Ref. ${e.ref_externa}`,'','¡Gracias por tu compra!'].join('\n'));
+  app.innerHTML=cab()+`<div class="card"><div class="check ok">✓</div><h2 class="ok" style="text-align:center">¡Pago aprobado!</h2>
+    <p class="mu" style="text-align:center">Ya puedes llevarte tus productos. Muestra este comprobante si te lo piden.</p>
+    <div class="line"><span class="sp">Comprobante</span><b>${esc(e.numero_factura)}</b></div>
+    <div class="line"><span class="sp">Fecha</span>${fechaLarga(e.fecha_emision)}</div>
+    ${e.lineas.map(l=>`<div class="line"><span class="sp">${esc(l.nombre)}<div class="mu">${l.cantidad} × ${cop(l.precio)}</div></span>${cop(l.cantidad*l.precio)}</div>`).join('')}
+    <div class="line"><span class="sp">Subtotal</span>${cop(e.subtotal)}</div><div class="line"><span class="sp">IVA incluido</span>${cop(e.impuestos)}</div>
+    <div class="line"><span class="sp"><b>Total</b></span><b>${cop(e.total)}</b></div>
+    <div class="line"><span class="sp">Pagado con</span>${esc(e.metodo_pago)} · ${esc(e.ref_externa||'')}</div>
+    <p class="mu">Comprobante de venta. No es factura electrónica de la DIAN.</p>
+    <button class="big" id="wa">Enviar por WhatsApp</button><button class="g big" id="nv" style="margin-top:8px">Nueva compra</button></div>`;
+  $('#wa').onclick=()=>window.open(wa,'_blank','noopener');$('#nv').onclick=()=>{pago=null;vCarrito()};
+}
+init();
+</script></body></html>
