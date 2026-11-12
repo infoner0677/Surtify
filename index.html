@@ -628,8 +628,10 @@ function escanear(){
   const unid=()=>[...cart.values()].reduce((a,x)=>a+x.qty,0);
   camara({titulo:'Escanear código de barras',ayuda:'Apunta la cámara al código de barras o QR del producto. Puedes escanear varios seguidos.',
     extra:`<div class="line" style="margin-top:8px"><span class="sp mu">Carrito: <b id="sn">${unid()}</b> unidades</span></div>`,
-    alLeer:cod=>{
-      const p=prods.find(x=>x.codigo_barras===cod);
+    alLeer:async cod=>{
+      let p=prods.find(x=>x.codigo_barras===cod);
+      if(!p){ // puede ser un producto creado después de abrir la sesión: recargar el catálogo y reintentar
+        const {data}=await db.from('v_productos_pos').select('*').order('nombre');if(data){prods=data;p=prods.find(x=>x.codigo_barras===cod)}}
       if(!p){toast('Código '+cod+' no registrado',true);return}
       if(p.stock<=0){toast(p.nombre+': agotado',true);return}
       add(p);pitido();toast('✓ '+p.nombre);const n=document.getElementById('sn');if(n)n.textContent=unid();
@@ -654,8 +656,11 @@ function recibirMercancia(){
     m.querySelector('#rc').onclick=cerrar;
     m.querySelector('#rg').onclick=async()=>{
       const items=[...lote].filter(([,n])=>n>0);if(!items.length){toast('Escanea al menos un producto',true);return}
-      let ok=0,mal=0;for(const [id,n] of items){const x=await call('ajustar_stock',{p_id_sucursal:Number(sede),p_id_producto:id,p_delta:n});x.data?ok++:mal++}
-      if(ok){cerrar();toast(`Entrada registrada: ${pl(ok,'producto')}${mal?` (${mal} con error)`:''}`);await tras({data:1})}};
+      let ok=0,mal=0;const res=[];for(const [id,n] of items){const x=await call('ajustar_stock',{p_id_sucursal:Number(sede),p_id_producto:id,p_delta:n});if(x.data){ok++;res.push([id,n,x.data.stock])}else mal++}
+      if(ok){cerrar();await tras({data:1});
+        const sn=(sucs.find(x=>String(x.id_sucursal)===String(sede))||{}).nombre_sucursal||'';
+        const mm=modal(`<h2 class="ok">Entrada registrada</h2><div class="mu">Entró a: ${esc(sn)}</div>${res.map(([id,n,st])=>`<div class="line"><span class="sp">${esc(nom(id))}</span><span>+${n} → <b>${st}</b></span></div>`).join('')}${mal?`<p class="wa">${mal} producto(s) con error</p>`:''}<button style="width:100%;margin-top:10px">Entendido</button>`);
+        mm.querySelector('button').onclick=()=>mm.remove()}};
   });
 }
 /* Escanea un código y lo deja en un campo de texto */
