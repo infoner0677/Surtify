@@ -593,7 +593,7 @@ function pitido(){try{const A=window.AudioContext||window.webkitAudioContext,c=n
    opts: titulo, ayuda, extra (HTML bajo el video), botones (HTML; por defecto "Listo"), alCerrar. Devuelve {m,cerrar} o null. */
 async function camara(o){
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){toast('Este navegador no permite usar la cámara. Escribe el código a mano.',true);return null}
-  const m=modal(`<h2>${o.titulo||'Escanear código de barras'}</h2><p class="mu">${o.ayuda||'Apunta la cámara al código del producto.'}</p>
+  const m=modal(`<h2>${o.titulo||'Escanear código de barras'}</h2><p class="mu">${o.ayuda||'Apunta la cámara al código de barras o QR del producto.'}</p>
     <video id="sv" playsinline muted autoplay style="width:100%;max-height:${o.extra?'32vh':'50vh'};border-radius:10px;background:#000;object-fit:cover"></video>
     ${o.extra||''}${o.botones||'<button id="sx" style="width:100%;margin-top:8px">Listo</button>'}`);
   const v=m.querySelector('#sv');let stop=false,stream=null,reader=null,ultimo='',tUlt=0;
@@ -609,14 +609,14 @@ async function camara(o){
   const fallo=e=>{cerrar();toast(e&&e.name==='NotAllowedError'?'Permiso de cámara denegado. Actívalo en el navegador o escribe el código.':(e&&e.message)||'No se pudo abrir la cámara',true)};
   (async()=>{try{
     if('BarcodeDetector' in window){
-      const det=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e','code_128','code_39']});
+      const det=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e','code_128','code_39','qr_code']});
       stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
       if(stop){stream.getTracks().forEach(t=>t.stop());return}
       v.srcObject=stream;await v.play().catch(()=>{});
       const ciclo=async()=>{if(stop)return;try{if(v.readyState>=2){const r=await det.detect(v);if(r&&r[0])alLeer(r[0].rawValue)}}catch(e){}setTimeout(ciclo,200)};ciclo();
     }else{
       await cargarZXing();if(stop)return;
-      const Z=window.ZXing,h=new Map();h.set(Z.DecodeHintType.POSSIBLE_FORMATS,[Z.BarcodeFormat.EAN_13,Z.BarcodeFormat.EAN_8,Z.BarcodeFormat.UPC_A,Z.BarcodeFormat.UPC_E,Z.BarcodeFormat.CODE_128,Z.BarcodeFormat.CODE_39]);
+      const Z=window.ZXing,h=new Map();h.set(Z.DecodeHintType.POSSIBLE_FORMATS,[Z.BarcodeFormat.EAN_13,Z.BarcodeFormat.EAN_8,Z.BarcodeFormat.UPC_A,Z.BarcodeFormat.UPC_E,Z.BarcodeFormat.CODE_128,Z.BarcodeFormat.CODE_39,Z.BarcodeFormat.QR_CODE]);
       reader=new Z.BrowserMultiFormatReader(h,150);
       await reader.decodeFromConstraints({video:{facingMode:{ideal:'environment'}},audio:false},v,r=>{if(r)alLeer(r.getText())});
     }
@@ -626,7 +626,7 @@ async function camara(o){
 /* Vender: cada lectura suma 1 unidad al carrito */
 function escanear(){
   const unid=()=>[...cart.values()].reduce((a,x)=>a+x.qty,0);
-  camara({titulo:'Escanear código de barras',ayuda:'Apunta la cámara al código del producto. Puedes escanear varios seguidos.',
+  camara({titulo:'Escanear código de barras',ayuda:'Apunta la cámara al código de barras o QR del producto. Puedes escanear varios seguidos.',
     extra:`<div class="line" style="margin-top:8px"><span class="sp mu">Carrito: <b id="sn">${unid()}</b> unidades</span></div>`,
     alLeer:cod=>{
       const p=prods.find(x=>x.codigo_barras===cod);
@@ -660,7 +660,7 @@ function recibirMercancia(){
 }
 /* Escanea un código y lo deja en un campo de texto */
 function escanearEn(sel,alTerminar){
-  camara({titulo:'Escanear código',ayuda:'Apunta la cámara al código de barras.',alLeer:(cod,cerrar)=>{
+  camara({titulo:'Escanear código',ayuda:'Apunta la cámara al código de barras o QR.',alLeer:(cod,cerrar)=>{
     const el=document.querySelector(sel);if(el){el.value=cod;el.dispatchEvent(new Event('input',{bubbles:true}))}
     pitido();toast('Código leído: '+cod);alTerminar&&alTerminar(cod);return true}});
 }
