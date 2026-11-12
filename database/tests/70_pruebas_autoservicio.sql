@@ -8,3 +8,6 @@
 -- ===== Migración 14 (comprobante Bre-B y fiado). Resultado esperado de las dos pruebas (rollback) =====
 -- Parte A: PRUEBAS_OK catalogo_modo;crear_comprobante;tope_rechaza;pasarela_no_aplica;anon_sube_su_captura;sin_pago_no_sube;carpeta_libre_rechazada;anon_no_lee;ref_corta_rechazada;sin_imagen_rechazada;ruta_ajena_rechazada;comprobante_ok;por_verificar;doble_envio_rechazado;ref_repetida_rechazada;sin_stock_sin_venta;cajero_no_concilia;concilia_una_vez;carlos_concilia;configurar_ok;cajero_no_configura;cupo_no_editable;
 -- Parte B: PRUEBAS_OK cliente_sin_acceso;exige_consentimiento;celular_validado;registro_unico;fiado_requiere_aprobacion;dueno_ve_pendiente;mostrador_bloquea_no_aprobado;cupo_obligatorio;fiado_ok;comprobante_fiado;cupo_respetado;cartera_ok;cuenta_ajena_rechazada;dueno_ve_saldo;rechazado_no_fia;pasarela_sigue_ok;panel_reporte_ok;
+
+-- ===== Migración 15 (importar_productos). Resultado esperado (rollback) =====
+-- PRUEBAS_OK cajero_no_importa;vacio_rechazado;sede_ajena;preview_sin_escribir;validaciones;crea_con_inventarios;reimport_actualiza_sin_tocar_stock;sin_duplicar;

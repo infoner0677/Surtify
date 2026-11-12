@@ -570,12 +570,13 @@ async function vInv(){
     <input id="iq" class="sp" style="min-width:160px;margin:0" placeholder="Buscar producto o código" value="${esc(invQ)}"><button class="g s" id="iqc" aria-label="Buscar escaneando" title="Buscar escaneando">📷</button>
     <select id="is" style="width:auto;margin:0"><option value="">Todas las sedes</option>${sucs.map(s=>`<option value="${s.id_sucursal}" ${String(s.id_sucursal)===invSuc?'selected':''}>${esc(s.nombre_sucursal)}</option>`).join('')}</select>
     <label style="margin:0"><input type="checkbox" id="ia" ${invSolo?'checked':''}>Solo alertas</label>
-    <button id="np" class="s">+ Producto</button><button id="rm" class="s">📷 Recibir mercancía</button></div></div>
+    <button id="np" class="s">+ Producto</button><button id="im" class="s g">⬆ Importar Excel</button><button id="rm" class="s">📷 Recibir mercancía</button></div></div>
     <div class="card t" id="it"></div>`;
   $('#iq').oninput=()=>{invQ=$('#iq').value;invList()};
   $('#is').onchange=()=>{invSuc=$('#is').value;invList()};
   $('#ia').onchange=()=>{invSolo=$('#ia').checked;invList()};
   $('#np').onclick=()=>nuevoProducto();
+  $('#im').onclick=importarProductos;
   $('#rm').onclick=recibirMercancia;
   $('#iqc').onclick=()=>escanearEn('#iq',cod=>{invQ=cod;invList()});
   invList();
@@ -617,6 +618,87 @@ function editarInv(r){
     if(!(s>=0)||!(mi>=0)){toast('Los valores no pueden ser negativos',true);return}
     const x=await call('ajustar_stock',{p_id_sucursal:r.id_sucursal,p_id_producto:r.id_producto,p_delta:s-r.stock,p_stock_minimo:mi});
     if(x.data){m.remove();toast('Inventario actualizado');await tras(x)}};
+}
+/* ---------- Carga masiva de productos (Excel / CSV) ---------- */
+const XLSX_URL='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+let xlsxP=null;
+const cargarXLSX=()=>window.XLSX?Promise.resolve():(xlsxP||(xlsxP=new Promise((ok,no)=>{const s=document.createElement('script');s.src=XLSX_URL;s.onload=ok;s.onerror=()=>{xlsxP=null;no(new Error('No se pudo cargar el lector de Excel (¿sin internet?)'))};document.head.appendChild(s)})));
+const normH=s=>String(s??'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+const IMP_COLS={nombre:['nombre','producto','descripcion','articulo'],precio:['precio','precio venta','precio de venta','valor','pvp'],iva:['iva','impuesto'],
+  codigo_barras:['codigo','codigo barras','codigo de barras','ean','barras','cod barras'],categoria:['categoria','linea','grupo'],
+  stock:['stock','stock inicial','cantidad','existencias','inventario','unidades'],stock_minimo:['stock minimo','minimo','stock min']};
+function impNum(v){ // "$ 12.500" -> 12500 ; "4,5" -> 4.5 ; deja pasar lo que no entienda para que el servidor lo marque
+  if(typeof v==='number')return v;let t=String(v??'').trim();if(!t)return '';t=t.replace(/[$\s%]/g,'');
+  if(t.includes('.')&&t.includes(','))t=t.replace(/\./g,'').replace(',','.');
+  else if(t.includes(','))t=/,\d{1,2}$/.test(t)?t.replace(',','.'):t.replace(/,/g,'');
+  else if(/^\d{1,3}(\.\d{3})+$/.test(t))t=t.replace(/\./g,'');
+  return /^-?\d+(\.\d+)?$/.test(t)?Number(t):String(v).trim();
+}
+function leerFilas(wb){
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  const A=XLSX.utils.sheet_to_json(ws,{header:1,raw:false,defval:''});
+  if(!A.length)throw new Error('El archivo está vacío');
+  const H=A[0].map(normH),idx={};
+  for(const k in IMP_COLS){const i=H.findIndex(h=>IMP_COLS[k].some(a=>h===a||h.startsWith(a+' ')));if(i>=0)idx[k]=i}
+  if(idx.nombre==null||idx.precio==null)throw new Error('No encuentro las columnas "Nombre" y "Precio" en la primera fila. Usa la plantilla.');
+  const filas=[],orig=[],cient=[];
+  A.slice(1).forEach((r,j)=>{
+    if(r.every(c=>String(c).trim()===''))return;
+    const o={nombre:String(r[idx.nombre]??'').trim(),precio:impNum(r[idx.precio])};
+    if(idx.iva!=null){let v=impNum(r[idx.iva]);if(typeof v==='number'&&v>0&&v<1)v=Math.round(v*100);o.iva=v}
+    if(idx.codigo_barras!=null){const c=String(r[idx.codigo_barras]??'').trim();if(/^\d(\.\d+)?e\+?\d+$/i.test(c))cient.push(j+2);o.codigo_barras=c}
+    if(idx.categoria!=null)o.categoria=String(r[idx.categoria]??'').trim();
+    if(idx.stock!=null)o.stock=impNum(r[idx.stock]);
+    if(idx.stock_minimo!=null)o.stock_minimo=impNum(r[idx.stock_minimo]);
+    filas.push(o);orig.push(j+2)});
+  if(!filas.length)throw new Error('No encontré productos debajo de la primera fila');
+  if(filas.length>2000)throw new Error('Máximo 2000 productos por carga ('+filas.length+' en el archivo). Divide el archivo.');
+  return {filas,orig,cient};
+}
+async function plantillaProductos(){
+  try{await cargarXLSX()}catch(e){toast(e.message,true);return}
+  const t=(a)=>a.map(r=>r.map(String));
+  const ws=XLSX.utils.aoa_to_sheet(t([['Nombre','Precio de venta (IVA incluido)','IVA %','Código de barras','Categoría','Stock inicial','Stock mínimo'],
+    ['Arroz Diana x 500g','3200','0','7701234567890','Granos','40','10'],['Gaseosa Colombiana 1.5L','5500','19','7709876543210','Bebidas','24','6'],['Pan tajado','6800','0','','Panadería','12','4']]));
+  ws['!cols']=[{wch:32},{wch:30},{wch:8},{wch:20},{wch:16},{wch:14},{wch:14}];
+  const ins=XLSX.utils.aoa_to_sheet(t([['Cómo llenar la plantilla'],[''],
+    ['1. Una fila por producto. Obligatorios: Nombre y Precio.'],['2. Precio: el que paga el cliente (IVA incluido), sin símbolos. Ej: 3200'],
+    ['3. IVA %: 19, 5 o 0. Si lo dejas vacío se toma 0.'],['4. Código de barras: opcional, pero con él puedes escanear. Formatea esa columna como TEXTO para no perder ceros ni que Excel lo vuelva 7,7E+12.'],
+    ['5. Categoría: escribe el nombre; si no existe se crea.'],['6. Stock inicial: unidades que hay hoy en la sede que elijas al importar.'],
+    ['7. Si el producto ya existe (mismo código, o mismo nombre si no tiene código) se actualiza nombre, precio, IVA y categoría. El stock NO se cambia.'],
+    ['8. Borra las 3 filas de ejemplo antes de subir tu lista.']]));
+  ins['!cols']=[{wch:120}];
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Productos');XLSX.utils.book_append_sheet(wb,ins,'Instrucciones');
+  XLSX.writeFile(wb,'plantilla_productos_surtify.xlsx');
+}
+function importarProductos(){
+  const m=modal(`<h2>Importar productos</h2>
+    <p class="mu" style="margin-top:0">Sube tu lista en Excel (.xlsx) o CSV. Primero te muestro un resumen; no se guarda nada hasta que confirmes.</p>
+    <button class="g s" id="ipl">⬇ Descargar plantilla de Excel</button>
+    <label style="margin-top:8px">Sede donde está el stock inicial<select id="isd">${sucs.map(s=>`<option value="${s.id_sucursal}">${esc(s.nombre_sucursal)}</option>`).join('')}</select></label>
+    <label>Archivo<input type="file" id="iar" accept=".xlsx,.xls,.csv,text/csv"></label>
+    <div id="irs"></div><div class="row" style="margin-top:8px"><button class="g sp" id="imc">Cerrar</button><button class="sp" id="imo" disabled>Importar</button></div>`);
+  $('#imc').onclick=()=>m.remove();$('#ipl').onclick=plantillaProductos;
+  let datos=null;
+  $('#iar').onchange=async e=>{const f=e.target.files[0];datos=null;$('#imo').disabled=true;if(!f)return;
+    const rs=m.querySelector('#irs');rs.innerHTML='<span class="mu">Leyendo archivo…</span>';
+    try{
+      await cargarXLSX();
+      const wb=XLSX.read(await f.arrayBuffer(),{type:'array'});
+      const d=leerFilas(wb);
+      if(d.cient.length)throw new Error('Los códigos de barras de las filas '+d.cient.slice(0,10).join(', ')+' están en notación científica (7,7E+12). En Excel formatea esa columna como Texto, vuelve a escribir los códigos y sube el archivo otra vez.');
+      const r=await call('importar_productos',{p_sucursal:Number($('#isd').value),p_filas:d.filas,p_aplicar:false});
+      if(!r.data){rs.innerHTML='';return}
+      datos={d,sede:Number($('#isd').value),res:r.data};
+      const x=r.data,errs=x.filas.filter(z=>z.estado==='Error');
+      rs.innerHTML=`<div class="kpis" style="margin:8px 0"><div><span class="mu">Nuevos</span><b class="ok">${x.nuevos}</b></div><div><span class="mu">Se actualizan</span><b>${x.actualizados}</b></div><div><span class="mu">Con error</span><b class="${x.errores?'er':''}">${x.errores}</b></div></div>
+        ${errs.length?`<div class="mu">Estas filas NO se importarán (corrígelas y súbelas de nuevo):</div><div style="max-height:160px;overflow:auto">${errs.slice(0,50).map(z=>`<div class="line"><span class="sp">Fila ${d.orig[z.fila-1]} · ${esc(z.nombre||'(sin nombre)')}<div class="er mu">${esc(z.error)}</div></span></div>`).join('')}${errs.length>50?`<div class="mu">…y ${errs.length-50} más</div>`:''}</div>`:''}
+        ${x.actualizados?'<p class="mu">Los productos que ya existen solo actualizan nombre, precio, IVA y categoría; su stock no cambia.</p>':''}`;
+      $('#imo').disabled=!(x.nuevos+x.actualizados);$('#imo').textContent='Importar '+(x.nuevos+x.actualizados)+' productos';
+    }catch(err){rs.innerHTML=`<p class="er">${esc(err.message)}</p>`}};
+  $('#imo').onclick=async()=>{if(!datos||busy)return;busy=true;$('#imo').disabled=true;
+    const r=await call('importar_productos',{p_sucursal:datos.sede,p_filas:datos.d.filas,p_aplicar:true});busy=false;
+    if(r.data){m.remove();toast(`Importación lista: ${r.data.nuevos} nuevos, ${r.data.actualizados} actualizados`+(r.data.errores?`, ${r.data.errores} omitidos`:''));await tras(r)}else $('#imo').disabled=false};
 }
 function nuevoProducto(cod0){
   const m=modal(`<h2>Producto nuevo</h2>

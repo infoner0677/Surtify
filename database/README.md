@@ -125,3 +125,9 @@ for f in tests/00_shim_supabase_local.sql 01_esquema.sql 02_funciones_y_triggers
 - En la app: pestaña **Autoservicio** del administrador (por verificar, dudosos, verificados, clientes y configuración) con insignia de pendientes.
 - Requiere configurar Google en el panel de Supabase (Authentication → Providers → Google, y Site URL / Redirect URLs con `https://infoner0677.github.io/Surtify/autoservicio.html?s=4`).
 
+## 15 · Carga masiva de productos (Excel/CSV)
+- `importar_productos(p_sucursal, p_filas jsonb, p_aplicar boolean)` (solo administrador, máx. 2000 filas). Con `p_aplicar = false` solo valida y devuelve el resumen por fila (nuevo / actualiza / error); con `true` aplica, todo o nada por llamada.
+- Producto existente (mismo código de barras, o mismo nombre si la fila no trae código): actualiza nombre, precio, IVA y categoría y **no toca el stock** (reimportar no pisa conteos reales). Producto nuevo: stock inicial en la sede elegida y 0 en las demás. Las categorías nuevas se crean por nombre.
+- Validaciones: nombre y precio obligatorios, IVA 0–100, stock no negativo, códigos o nombres repetidos dentro del archivo.
+- En la app: Inventario → **⬆ Importar Excel** (descarga plantilla, resumen previo, confirmar). El archivo se lee en el navegador (SheetJS) y acepta precios como `$ 3.200`, IVA como `19%` y avisa si Excel convirtió los códigos de barras a notación científica.
+
