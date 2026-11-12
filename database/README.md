@@ -96,3 +96,8 @@ for f in tests/00_shim_supabase_local.sql 01_esquema.sql 02_funciones_y_triggers
 ## 09 · Listado de facturas
 - `v_facturas_recientes` ahora incluye sede, empleado, cliente y unidades (solo se añadieron columnas).
 - En la app: pestaña **Mis ventas** para el cajero (solo sus facturas) y **Facturas** para el administrador (todas las sedes, con filtros por periodo, sede, medio de pago y búsqueda por número, cliente o cajero). Tocar una factura muestra su detalle.
+
+## 10 · Códigos de demo válidos / 11 · Sugerencias de compra
+- `10`: corrige el dígito verificador EAN-13 de los códigos de la demo (para el escáner de cámara).
+- `11`: `sugerencias_compra(p_dias, p_cobertura, p_entrega)` (solo administrador). Con las ventas netas de los últimos `p_dias` días (facturas − devoluciones) calcula por producto y sede el promedio diario, cuántos días alcanza el stock, la fecha ideal de pedido y la cantidad sugerida = ceil(promedio × (entrega + cobertura)) − stock. Marca **Urgente** (se acaba antes de que llegue el pedido o está agotado) y **Pronto**. Si el negocio lleva menos de `p_dias` días vendiendo, usa los días reales.
+- En la app (administrador): pestaña **Compras** (con globo de urgentes), aviso en el Panel, ajuste de días de entrega y cobertura, y envío del pedido por WhatsApp o copiado.

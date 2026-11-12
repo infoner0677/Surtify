@@ -102,11 +102,12 @@ async function boot(){
   if(!p.data){app.innerHTML='<div class="card"><h2>Usuario sin empleado</h2><p>Tu cuenta no está vinculada a un empleado activo.</p><button class="g" id="lo">Salir</button></div>';$('#lo').onclick=logout;return}
   perfil=p.data;adm=!!perfil.es_administrador;tab=adm?'panel':'vender';await refresh();
 }
-async function logout(){await db.auth.signOut();cart.clear();devSel=null;repR=null;cartera=[];carteraOk=false;metodoSel='Efectivo';cliSel='';facPer='hoy';facSuc='';facQ='';facMet='';caja=null;perfil=null;login()}
+async function logout(){await db.auth.signOut();cart.clear();devSel=null;repR=null;cartera=[];carteraOk=false;metodoSel='Efectivo';cliSel='';facPer='hoy';facSuc='';facQ='';facMet='';sugUrg=0;caja=null;perfil=null;login()}
 async function refresh(){
   caja=(await call('resumen_caja')).data;
   if(caja){const {data,error}=await db.from('v_productos_pos').select('*').order('nombre');if(error)toast(error.message,true);prods=data||[]}
-  if(adm){const {count}=await db.from('v_inventario_admin').select('id_inventario',{count:'exact',head:true}).eq('en_alerta',true);invAlertas=count||0}
+  if(adm){const {count}=await db.from('v_inventario_admin').select('id_inventario',{count:'exact',head:true}).eq('en_alerta',true);invAlertas=count||0;
+    const sg=await db.rpc('sugerencias_compra',{p_entrega:sugEnt,p_cobertura:sugCob});sugUrg=sg.error?0:((sg.data&&sg.data.items)||[]).filter(x=>x.urgencia==='Urgente').length}
   render();
 }
 
@@ -126,7 +127,7 @@ function bindOpen(){
 function render(){
   const h=head();
   if(!adm&&!caja){app.innerHTML=h+openCard();$('#lo').onclick=logout;btnInstalar();bindOpen();return}
-  const tabs=adm?[['panel','Panel'],['inv','Inventario'+(invAlertas?` <span class="badge">${invAlertas}</span>`:'')],['vender','Vender'],['facturas','Facturas'],['fiados','Fiados'],['devolver','Devolver'],['gasto','Gasto'],['reporte','Reporte'],['cerrar','Cerrar caja']]
+  const tabs=adm?[['panel','Panel'],['inv','Inventario'+(invAlertas?` <span class="badge">${invAlertas}</span>`:'')],['compras','Compras'+(sugUrg?` <span class="badge">${sugUrg}</span>`:'')],['vender','Vender'],['facturas','Facturas'],['fiados','Fiados'],['devolver','Devolver'],['gasto','Gasto'],['reporte','Reporte'],['cerrar','Cerrar caja']]
                 :[['vender','Vender'],['facturas','Mis ventas'],['fiados','Fiados'],['devolver','Devolver'],['gasto','Gasto'],['reporte','Reporte'],['cerrar','Cerrar caja']];
   const deCaja=['vender','devolver','gasto','cerrar'].includes(tab);
   app.innerHTML=h+(caja&&deCaja?`<div class="stats">
@@ -137,7 +138,7 @@ function render(){
   $('#lo').onclick=logout;btnInstalar();
   app.querySelectorAll('[data-t]').forEach(b=>{b.onclick=()=>{tab=b.dataset.t;render()}});
   if(deCaja&&!caja){$('#body').innerHTML=openCard();bindOpen();return}
-  ({panel:vPanel,inv:vInv,vender:vVender,facturas:vFacturas,fiados:vFiados,devolver:vDevolver,gasto:vGasto,reporte:vReporte,cerrar:vCerrar})[tab]();
+  ({panel:vPanel,inv:vInv,compras:vCompras,vender:vVender,facturas:vFacturas,fiados:vFiados,devolver:vDevolver,gasto:vGasto,reporte:vReporte,cerrar:vCerrar})[tab]();
 }
 
 /* ---------- Vender ---------- */
@@ -331,6 +332,7 @@ async function vDevolver(){
 /* ---------- Reporte para el contador ---------- */
 let repR=null,repPer='hoy',repSuc='';
 let facPer='hoy',facSuc='',facQ='',facMet='';
+let sugUrg=0,sugEnt=3,sugCob=14,sugSuc='';
 function bogota(d){return new Date(d.getTime()-5*3600e3).toISOString().slice(0,10)}
 function repRango(){
   const hoy=new Date(),h=bogota(hoy);
@@ -506,6 +508,42 @@ function nuevoProducto(cod0){
     if(x.data){m.remove();toast('Producto creado');await tras(x)}};
 }
 
+/* ---------- Sugerencias de compra (administrador) ---------- */
+const ddmm2=x=>{const [a,m,d]=String(x).split('-');return d+'/'+m};
+function textoPedido(items,sede){
+  const L=[`*Pedido sugerido · ${perfil.nombre_comercial}*`];
+  const gr=[...new Set(items.map(i=>i.sucursal))];
+  gr.forEach(g=>{if(gr.length>1||sede)L.push('',`_${g}_`);items.filter(i=>i.sucursal===g).forEach(i=>L.push(`• ${i.producto} — ${i.sugerido} und`))});
+  L.push('','Gracias.');return L.join('\n');
+}
+async function vCompras(){
+  $('#body').innerHTML='<div class="card">Calculando sugerencias…</div>';
+  if(!sucs.length){const {data}=await db.from('sucursales').select('id_sucursal,nombre_sucursal').order('id_sucursal');sucs=data||[]}
+  const {data:r}=await call('sugerencias_compra',{p_entrega:sugEnt,p_cobertura:sugCob});
+  if(tab!=='compras')return;
+  if(!r){$('#body').innerHTML='<div class="card er">No se pudieron calcular las sugerencias.</div>';return}
+  const todos=(r.items||[]),items=todos.filter(i=>!sugSuc||String(i.id_sucursal)===sugSuc);
+  sugUrg=todos.filter(i=>i.urgencia==='Urgente').length;
+  const b=app.querySelector('[data-t="compras"]');if(b)b.innerHTML='Compras'+(sugUrg?` <span class="badge">${sugUrg}</span>`:'');
+  const fila=i=>`<div class="line"><span class="sp"><b>${esc(i.producto)}</b><div class="mu">${esc(i.sucursal)} · stock ${i.stock} · vendes ~${Number(i.promedio_dia)} und/día${i.dias_alcanza!=null?(i.dias_alcanza<1?' · alcanza menos de 1 día':' · alcanza ~'+Math.floor(i.dias_alcanza)+' días'):''}</div>
+    <div class="${i.urgencia==='Urgente'?'er':'wa'}">${i.urgencia==='Urgente'?'Pide hoy':(i.fecha_pedido&&i.fecha_pedido>r.hoy?'Pide antes del '+ddmm2(i.fecha_pedido):'Pide pronto')}</div></span><span style="text-align:right"><b>${i.sugerido}</b><div class="mu">und sugeridas</div></span></div>`;
+  const u=items.filter(i=>i.urgencia==='Urgente'),pr=items.filter(i=>i.urgencia!=='Urgente');
+  $('#body').innerHTML=`<div class="card"><h2>Sugerencias de compra</h2>
+    <p class="mu">Con tus ventas netas de los últimos ${r.dias} días${r.dias_base<r.dias?` (tu historial es de ${r.dias_base} ${r.dias_base===1?'día':'días'}, se usa ese promedio)`:''} calculamos cuánto te dura cada producto y cuándo pedirlo.</p>
+    <div class="row">${adm&&sucs.length>1?`<select id="cs" style="margin:0;flex:1 1 100%"><option value="">Todas las sedes</option>${sucs.map(x=>`<option value="${x.id_sucursal}" ${String(x.id_sucursal)===sugSuc?'selected':''}>${esc(x.nombre_sucursal)}</option>`).join('')}</select>`:''}
+      <select id="ce" style="margin:0;flex:1 1 45%">${[1,3,5,7].map(d=>`<option value="${d}" ${d===sugEnt?'selected':''}>Entrega: ${d} ${d===1?'día':'días'}</option>`).join('')}</select>
+      <select id="cc" style="margin:0;flex:1 1 45%">${[7,14,21,30].map(d=>`<option value="${d}" ${d===sugCob?'selected':''}>Cubrir: ${d} días</option>`).join('')}</select></div></div>
+  ${items.length?`${u.length?`<div class="card alert"><h2>🔴 Urgente (${u.length})</h2>${u.map(fila).join('')}</div>`:''}
+    ${pr.length?`<div class="card"><h2>🟡 Pedir pronto (${pr.length})</h2>${pr.map(fila).join('')}</div>`:''}
+    <button id="cw" style="width:100%">Enviar pedido por WhatsApp</button><button class="g" id="cp" style="width:100%;margin-top:6px">Copiar lista del pedido</button>`
+   :'<div class="card"><span class="ok">✔ Todo en orden:</span> con tu ritmo de ventas, el inventario alcanza para los próximos días.</div>'}`;
+  const nuevo=()=>{sugSuc=$('#cs')?$('#cs').value:sugSuc;sugEnt=Number($('#ce').value);sugCob=Number($('#cc').value);vCompras()};
+  ['#cs','#ce','#cc'].forEach(x=>{const e=$(x);if(e)e.onchange=nuevo});
+  const txt=()=>textoPedido(items,!!sugSuc);
+  if($('#cw'))$('#cw').onclick=()=>window.open('https://wa.me/?text='+encodeURIComponent(txt()),'_blank','noopener');
+  if($('#cp'))$('#cp').onclick=async()=>{try{await navigator.clipboard.writeText(txt());toast('Lista copiada')}catch(e){toast('No se pudo copiar',true)}};
+}
+
 /* ---------- Panel multisede (administrador) ---------- */
 async function vPanel(){
   $('#body').innerHTML='<div class="card">Cargando panel…</div>';
@@ -529,6 +567,7 @@ async function vPanel(){
     <div><span class="mu">Gastos de caja</span><b>${cop(p.gastos)}</b></div>
     <div><span class="mu">Devoluciones</span><b>${cop(p.devoluciones)}</b></div>
     <div><span class="mu">Por cobrar (fiados)</span><b>${cop(porCobrar)}</b><span class="mu">${pl(deb.length,'cliente')}</span></div></div>
+  ${sugUrg?`<div class="card alert"><b>🛒 ${pl(sugUrg,'producto')} para pedir con urgencia</b> <button class="g s" id="gc" style="margin-left:8px">Ver sugerencias</button></div>`:''}
   <div class="sucs">${(p.sucursales||[]).map(s=>`<div class="card"><h2>${esc(s.nombre)}</h2>
     <div class="line"><span class="sp mu">Hoy</span><b>${cop(s.ventas_hoy)}</b><span class="mu">${pl(s.num_ventas_hoy,'venta')}</span></div>
     <div class="line"><span class="sp mu">Últimos ${p.dias} días</span><b>${cop(s.ventas_periodo)}</b><span class="mu">${pl(s.num_ventas_periodo,'venta')}</span></div>
@@ -541,6 +580,7 @@ async function vPanel(){
   <div class="card t"><h2>Turnos de caja recientes</h2>${(p.turnos_recientes||[]).length?`<table><tr><th>Sede</th><th>Cajero</th><th>Apertura</th><th>Estado</th><th class="n">Esperado</th><th class="n">Contado</th><th class="n">Diferencia</th></tr>${p.turnos_recientes.map(x=>`<tr><td>${esc(x.sucursal)}</td><td>${esc(x.empleado)}</td><td>${hora(x.apertura)}</td><td>${x.estado==='Abierta'?'<span class="ok">Abierta</span>':'Cerrada'}</td><td class="n">${cop(x.esperado)}</td><td class="n">${x.contado==null?'—':cop(x.contado)}</td><td class="n ${x.diferencia==null?'':x.diferencia===0?'ok':x.diferencia<0?'er':'wa'}">${x.diferencia==null?'—':x.diferencia===0?'Cuadra':cop(x.diferencia)}</td></tr>`).join('')}</table>`:'<span class="mu">Aún no hay turnos.</span>'}</div>`;
   app.querySelectorAll('[data-d]').forEach(b=>{b.onclick=()=>{dias=+b.dataset.d;vPanel()}});
   $('#rf').onclick=()=>{vPanel()};
+  if($('#gc'))$('#gc').onclick=()=>{tab='compras';render()};
   app.querySelectorAll('[data-al]').forEach(b=>{b.onclick=()=>{invSuc=b.dataset.al;invSolo=true;invQ='';tab='inv';render()}});
 }
 
