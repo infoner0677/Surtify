@@ -146,8 +146,9 @@ function vVender(){
   const low=prods.filter(bajo);
   $('#body').innerHTML=(low.length?`<div class="card alert"><b>⚠ ${low.length} producto${low.length>1?'s':''} con stock bajo</b>
     <div class="mu">${low.slice(0,6).map(p=>esc(p.nombre)+' ('+p.stock+')').join(' · ')}${low.length>6?' …':''}</div></div>`:'')+
-  `<div class="card"><input id="q" placeholder="Buscar o escanear código de barras" value="${esc(q)}" autocomplete="off"><div class="grid" id="pl"></div></div>
+  `<div class="card"><div class="row"><input id="q" placeholder="Buscar o escanear código de barras" value="${esc(q)}" autocomplete="off" style="flex:1;min-width:0"><button class="g" id="cam" title="Escanear con la cámara" aria-label="Escanear con la cámara" style="margin:4px 0 8px">📷 Escanear</button></div><div class="grid" id="pl"></div></div>
   <div class="card"><h2>Carrito</h2><div id="cl"></div></div>`;
+  $('#cam').onclick=escanear;
   const input=$('#q');
   input.oninput=()=>{q=input.value;list()};
   input.addEventListener('keydown',e=>{if(e.key!=='Enter')return;
@@ -537,6 +538,48 @@ async function vPanel(){
   app.querySelectorAll('[data-d]').forEach(b=>{b.onclick=()=>{dias=+b.dataset.d;vPanel()}});
   $('#rf').onclick=()=>{vPanel()};
   app.querySelectorAll('[data-al]').forEach(b=>{b.onclick=()=>{invSuc=b.dataset.al;invSolo=true;invQ='';tab='inv';render()}});
+}
+
+/* ---------- Escáner de códigos de barras con la cámara ---------- */
+const ZXING_URL='https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js';
+let zxingP=null;
+const cargarZXing=()=>window.ZXing?Promise.resolve():(zxingP||(zxingP=new Promise((ok,no)=>{const s=document.createElement('script');s.src=ZXING_URL;s.onload=ok;s.onerror=()=>{zxingP=null;no(new Error('No se pudo cargar el lector (¿sin internet?)'))};document.head.appendChild(s)})));
+function pitido(){try{const A=window.AudioContext||window.webkitAudioContext,c=new A(),o=c.createOscillator(),g=c.createGain();o.frequency.value=880;g.gain.value=.08;o.connect(g);g.connect(c.destination);o.start();setTimeout(()=>{o.stop();c.close()},110)}catch(e){}try{navigator.vibrate&&navigator.vibrate(60)}catch(e){}}
+async function escanear(){
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){toast('Este navegador no permite usar la cámara. Escribe el código en la búsqueda.',true);return}
+  const m=modal(`<h2>Escanear código de barras</h2><p class="mu" id="sm">Apunta la cámara al código del producto. Puedes escanear varios seguidos.</p>
+    <video id="sv" playsinline muted autoplay style="width:100%;max-height:50vh;border-radius:10px;background:#000;object-fit:cover"></video>
+    <div class="line" style="margin-top:8px"><span class="sp mu" id="sc">Carrito: <b id="sn">${[...cart.values()].reduce((a,x)=>a+x.qty,0)}</b> unidades</span></div>
+    <button id="sx" style="width:100%">Listo</button>`);
+  const v=m.querySelector('#sv');let stop=false,stream=null,reader=null,ultimo='',tUlt=0;
+  const cerrar=()=>{stop=true;try{reader&&reader.reset()}catch(e){}try{stream&&stream.getTracks().forEach(t=>t.stop())}catch(e){}m.remove()};
+  m.querySelector('#sx').onclick=cerrar;
+  m.addEventListener('mousedown',e=>{if(e.target===m)cerrar()});
+  const alLeer=cod=>{
+    cod=String(cod||'').trim();if(!cod)return;
+    const t=Date.now();if(cod===ultimo&&t-tUlt<1200){tUlt=t;return} // mismo código aún frente a la cámara: no repetir
+    ultimo=cod;tUlt=t;
+    const p=prods.find(x=>x.codigo_barras===cod);
+    if(!p){toast('Código '+cod+' no registrado',true);return}
+    if(p.stock<=0){toast(p.nombre+': agotado',true);return}
+    add(p);pitido();toast('✓ '+p.nombre);
+    const n=m.querySelector('#sn');if(n)n.textContent=[...cart.values()].reduce((a,x)=>a+x.qty,0);
+  };
+  const fallo=e=>{cerrar();toast(e&&e.name==='NotAllowedError'?'Permiso de cámara denegado. Actívalo en el navegador o escribe el código.':(e&&e.message)||'No se pudo abrir la cámara',true)};
+  try{
+    if('BarcodeDetector' in window){
+      const det=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e','code_128','code_39']});
+      stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
+      if(stop){stream.getTracks().forEach(t=>t.stop());return}
+      v.srcObject=stream;await v.play().catch(()=>{});
+      const ciclo=async()=>{if(stop)return;try{if(v.readyState>=2){const r=await det.detect(v);if(r&&r[0])alLeer(r[0].rawValue)}}catch(e){}setTimeout(ciclo,200)};ciclo();
+    }else{
+      await cargarZXing();if(stop)return;
+      const Z=window.ZXing,h=new Map();h.set(Z.DecodeHintType.POSSIBLE_FORMATS,[Z.BarcodeFormat.EAN_13,Z.BarcodeFormat.EAN_8,Z.BarcodeFormat.UPC_A,Z.BarcodeFormat.UPC_E,Z.BarcodeFormat.CODE_128,Z.BarcodeFormat.CODE_39]);
+      reader=new Z.BrowserMultiFormatReader(h,150);
+      await reader.decodeFromConstraints({video:{facingMode:{ideal:'environment'}},audio:false},v,(r)=>{if(r&&!stop)alLeer(r.getText())});
+    }
+  }catch(e){fallo(e)}
 }
 
 /* ---------- App instalable (PWA) ---------- */

@@ -18,4 +18,5 @@ Surtify es una aplicación web instalable: `manifest.webmanifest`, `sw.js` e íc
 - **Android / Chrome / Edge:** botón "Instalar app" dentro de Surtify (o menú ⋮ → "Instalar aplicación").
 - **iPhone / iPad:** en Safari, Compartir → "Agregar a inicio".
 - El service worker guarda la interfaz para que la app abra sin internet, pero **no** guarda datos ni ventas: vender y consultar requieren conexión (el modo sin conexión con sincronización queda como siguiente etapa).
+- **Escáner por cámara:** botón "📷 Escanear" en Vender. Usa el lector nativo del navegador (Chrome/Android) o, si no existe (iPhone/Safari), la librería ZXing. Necesita HTTPS y permiso de cámara. `assets/codigos_demo.png` es una hoja con los códigos de la demo para probarlo.
 - Al cambiar `index.html`, sube la versión `V` en `sw.js` si quieres forzar la renovación de la copia guardada.

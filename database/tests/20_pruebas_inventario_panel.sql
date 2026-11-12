@@ -26,7 +26,7 @@ begin
 
   select id_sucursal into v_rest  from sucursales where nombre_sucursal = 'Sede Principal - Restrepo';
   select id_sucursal into v_norte from sucursales where nombre_sucursal = 'Sede Norte - Chapinero';
-  select id_producto into v_jamon from productos where codigo_barras = '7701234560012';
+  select id_producto into v_jamon from productos where codigo_barras = '7701234560010';
   assert v_rest is not null and v_norte is not null and v_jamon is not null, 'datos demo presentes (04 y 06)';
 
   -- ===== T1: el cajero NO puede usar funciones de administrador =====

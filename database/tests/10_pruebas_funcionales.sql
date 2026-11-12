@@ -60,8 +60,8 @@ end $$;
 do $$
 declare r jsonb; v_jamon int; v_queso int;
 begin
-  select id_producto into v_jamon from productos where codigo_barras = '7701234560012';
-  select id_producto into v_queso from productos where codigo_barras = '7709876540034';
+  select id_producto into v_jamon from productos where codigo_barras = '7701234560010';
+  select id_producto into v_queso from productos where codigo_barras = '7709876540032';
   perform set_config('request.jwt.claim.sub', test.uid_of('diana.gomez@eltriunfo.com')::text, true);
   perform set_config('role', 'authenticated', true);
   -- Venta idéntica a la del informe: 3 jamones + 1 queso = $73.500 pagados con $100.000
@@ -80,7 +80,7 @@ end $$;
 do $$
 declare r jsonb; v_huevos int; res jsonb;
 begin
-  select id_producto into v_huevos from productos where codigo_barras = '7703333000014';
+  select id_producto into v_huevos from productos where codigo_barras = '7703333000015';
   perform set_config('request.jwt.claim.sub', test.uid_of('diana.gomez@eltriunfo.com')::text, true);
   perform set_config('role', 'authenticated', true);
   r := public.registrar_venta(jsonb_build_array(jsonb_build_object('id_producto', v_huevos, 'cantidad', 2)), 'Nequi');
@@ -97,7 +97,7 @@ end $$;
 do $$
 declare v_jamon int; v_peds int; v_stock int;
 begin
-  select id_producto into v_jamon from productos where codigo_barras = '7701234560012';
+  select id_producto into v_jamon from productos where codigo_barras = '7701234560010';
   select count(*) into v_peds from pedidos; select stock into v_stock from inventarios_sucursal where id_producto = v_jamon;
   perform set_config('request.jwt.claim.sub', test.uid_of('diana.gomez@eltriunfo.com')::text, true);
   perform set_config('role', 'authenticated', true);
@@ -149,7 +149,7 @@ end $$;
 do $$
 declare v_jamon int;
 begin
-  select id_producto into v_jamon from productos where codigo_barras = '7701234560012';
+  select id_producto into v_jamon from productos where codigo_barras = '7701234560010';
   perform set_config('request.jwt.claim.sub', test.uid_of('carlos.mendoza@eltriunfo.com')::text, true);
   perform set_config('role', 'authenticated', true);
   assert (public.perfil_actual()->>'es_administrador')::boolean, 'Carlos es admin';
@@ -165,7 +165,7 @@ end $$;
 do $$
 declare v_fac int; v_nc int; v_jamon int; v_stock int; v_esp numeric;
 begin
-  select id_producto into v_jamon from productos where codigo_barras = '7701234560012';
+  select id_producto into v_jamon from productos where codigo_barras = '7701234560010';
   select id_factura into v_fac from facturas where numero_factura = 'SETR-0001';
   select stock into v_stock from inventarios_sucursal where id_producto = v_jamon;
   insert into notas_credito (id_factura, numero_nota, motivo_dian, total_reversado) values (v_fac, 'NC-0001', 'Devolución parcial', 16500) returning id_nota_credito into v_nc;

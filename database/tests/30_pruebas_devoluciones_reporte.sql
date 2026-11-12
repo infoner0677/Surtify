@@ -10,7 +10,7 @@ begin
   select auth_user_id into u_diana from empleados where email='diana.gomez@eltriunfo.com';
   if u_diana is null then insert into auth.users (id,email,email_confirmed_at) values (gen_random_uuid(),'diana.gomez@eltriunfo.com',now()) returning id into u_diana; end if;
   select id_sucursal into v_rest from sucursales where nombre_sucursal='Sede Principal - Restrepo';
-  select id_producto into v_jamon from productos where codigo_barras='7701234560012';
+  select id_producto into v_jamon from productos where codigo_barras='7701234560010';
 
   perform set_config('request.jwt.claim.sub', u_diana::text, true);
   perform set_config('role','authenticated',true);

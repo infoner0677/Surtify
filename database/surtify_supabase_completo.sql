@@ -855,15 +855,15 @@ begin
 
   -- Los dos productos originales del informe (IVA 19 %) + productos de ejemplo. IVA de ejemplo: ajústalo a tu caso.
   for rec in select * from (values
-    (v_cat_carnes,  'Jamón Premium Pierna x 500g',   16500, 19, '7701234560012', 120, 15),
-    (v_cat_lacteos, 'Bloque Queso Doble Crema 1kg',  24000, 19, '7709876540034',  80, 10),
+    (v_cat_carnes,  'Jamón Premium Pierna x 500g',   16500, 19, '7701234560010', 120, 15),
+    (v_cat_lacteos, 'Bloque Queso Doble Crema 1kg',  24000, 19, '7709876540032',  80, 10),
     (v_cat_carnes,  'Salchicha Ranchera x 8 und',    12500, 19, '7701111000011',  60, 10),
     (v_cat_carnes,  'Chorizo Antioqueño x 500g',     15800, 19, '7701111000028',  45,  8),
     (v_cat_carnes,  'Mortadela Especial x 450g',      9200, 19, '7701111000035',  50, 10),
-    (v_cat_lacteos, 'Queso Costeño x 500g',          14500, 19, '7702222000019',  40,  8),
-    (v_cat_lacteos, 'Mantequilla con Sal x 250g',     8900,  5, '7702222000026',  35,  6),
-    (v_cat_despensa,'Huevos AA x 30 und',            21000,  0, '7703333000014',  70, 12),
-    (v_cat_despensa,'Salsa de Tomate x 400g',         6200, 19, '7703333000021',  90, 15)
+    (v_cat_lacteos, 'Queso Costeño x 500g',          14500, 19, '7702222000013',  40,  8),
+    (v_cat_lacteos, 'Mantequilla con Sal x 250g',     8900,  5, '7702222000020',  35,  6),
+    (v_cat_despensa,'Huevos AA x 30 und',            21000,  0, '7703333000015',  70, 12),
+    (v_cat_despensa,'Salsa de Tomate x 400g',         6200, 19, '7703333000022',  90, 15)
   ) as t(cat, nombre, precio, iva, barras, stock, minimo) loop
     insert into productos (id_comercio, id_categoria, nombre, precio_venta, iva_porcentaje, codigo_barras)
     values (v_com, rec.cat, rec.nombre, rec.precio, rec.iva, rec.barras) returning id_producto into v_prod;
@@ -1696,3 +1696,12 @@ select f.id_factura, f.numero_factura, f.fecha_emision, f.total_facturado, f.met
   left join empleados e on e.id_empleado = p.id_empleado
   left join clientes c on c.id_cliente = p.id_cliente;
 grant select on v_facturas_recientes to authenticated;
+-- Surtify 10: códigos de barras de la demo con dígito verificador EAN-13 válido
+-- (el lector de cámara descarta los códigos con dígito verificador incorrecto).
+-- En instalaciones nuevas ya vienen correctos desde 04_datos_demo.sql; esto corrige bases ya cargadas.
+update productos set codigo_barras = '7701234560010' where codigo_barras = '7701234560012';
+update productos set codigo_barras = '7709876540032' where codigo_barras = '7709876540034';
+update productos set codigo_barras = '7702222000013' where codigo_barras = '7702222000019';
+update productos set codigo_barras = '7702222000020' where codigo_barras = '7702222000026';
+update productos set codigo_barras = '7703333000015' where codigo_barras = '7703333000014';
+update productos set codigo_barras = '7703333000022' where codigo_barras = '7703333000021';
