@@ -62,7 +62,7 @@ const hora=x=>x?new Date(x).toLocaleString('es-CO',{timeZone:'America/Bogota',da
 const pl=(n,w)=>`${n||0} ${w}${Number(n)===1?'':'s'}`;
 const ddmm=f=>String(f).slice(8,10)+'/'+String(f).slice(5,7);
 let db,perfil,caja,adm=false,prods=[],cart=new Map(),tab='vender',q='',busy=false;
-let facSin=false;
+let facSin=false,autoSub='verificar',autoCnt=0;
 let cartera=[],carteraOk=false,metodoSel='Efectivo',cliSel='',fiQ='';
 let dias=7,invData=[],cats=[],sucs=[],invAlertas=0,invQ='',invSuc='',invSolo=false;
 
@@ -103,11 +103,13 @@ async function boot(){
   if(!p.data){app.innerHTML='<div class="card"><h2>Usuario sin empleado</h2><p>Tu cuenta no está vinculada a un empleado activo.</p><button class="g" id="lo">Salir</button></div>';$('#lo').onclick=logout;return}
   perfil=p.data;adm=!!perfil.es_administrador;tab=adm?'panel':'vender';await refresh();
 }
-async function logout(){await db.auth.signOut();cart.clear();devSel=null;repR=null;cartera=[];carteraOk=false;metodoSel='Efectivo';cliSel='';facPer='hoy';facSuc='';facQ='';facMet='';facSin=false;sugUrg=0;caja=null;perfil=null;login()}
+async function logout(){await db.auth.signOut();cart.clear();devSel=null;repR=null;cartera=[];carteraOk=false;metodoSel='Efectivo';cliSel='';facPer='hoy';facSuc='';facQ='';facMet='';facSin=false;autoSub='verificar';autoCnt=0;sugUrg=0;caja=null;perfil=null;login()}
 async function refresh(){
   caja=(await call('resumen_caja')).data;
   if(caja){const {data,error}=await db.from('v_productos_pos').select('*').order('nombre');if(error)toast(error.message,true);prods=data||[]}
   if(adm){const {count}=await db.from('v_inventario_admin').select('id_inventario',{count:'exact',head:true}).eq('en_alerta',true);invAlertas=count||0;
+    const [ap,ac]=await Promise.all([db.from('pagos_autoservicio').select('id_pago',{count:'exact',head:true}).eq('verificacion','Por verificar'),
+      db.from('clientes_autoservicio').select('id_cliente',{count:'exact',head:true}).eq('estado','Pendiente')]);autoCnt=(ap.count||0)+(ac.count||0);
     const sg=await db.rpc('sugerencias_compra',{p_entrega:sugEnt,p_cobertura:sugCob});sugUrg=sg.error?0:((sg.data&&sg.data.items)||[]).filter(x=>x.urgencia==='Urgente').length}
   render();
 }
@@ -128,7 +130,7 @@ function bindOpen(){
 function render(){
   const h=head();
   if(!adm&&!caja){app.innerHTML=h+openCard();$('#lo').onclick=logout;btnInstalar();bindOpen();return}
-  const tabs=adm?[['panel','Panel'],['inv','Inventario'+(invAlertas?` <span class="badge">${invAlertas}</span>`:'')],['compras','Compras'+(sugUrg?` <span class="badge">${sugUrg}</span>`:'')],['vender','Vender'],['facturas','Facturas'],['fiados','Fiados'],['devolver','Devolver'],['gasto','Gasto'],['reporte','Reporte'],['cerrar','Cerrar caja']]
+  const tabs=adm?[['panel','Panel'],['inv','Inventario'+(invAlertas?` <span class="badge">${invAlertas}</span>`:'')],['compras','Compras'+(sugUrg?` <span class="badge">${sugUrg}</span>`:'')],['vender','Vender'],['facturas','Facturas'],['fiados','Fiados'],['auto','Autoservicio'+(autoCnt?` <span class="badge">${autoCnt}</span>`:'')],['devolver','Devolver'],['gasto','Gasto'],['reporte','Reporte'],['cerrar','Cerrar caja']]
                 :[['vender','Vender'],['facturas','Mis ventas'],['fiados','Fiados'],['devolver','Devolver'],['gasto','Gasto'],['reporte','Reporte'],['cerrar','Cerrar caja']];
   const deCaja=['vender','devolver','gasto','cerrar'].includes(tab);
   app.innerHTML=h+(caja&&deCaja?`<div class="stats">
@@ -139,7 +141,7 @@ function render(){
   $('#lo').onclick=logout;btnInstalar();
   app.querySelectorAll('[data-t]').forEach(b=>{b.onclick=()=>{tab=b.dataset.t;render()}});
   if(deCaja&&!caja){$('#body').innerHTML=openCard();bindOpen();return}
-  ({panel:vPanel,inv:vInv,compras:vCompras,vender:vVender,facturas:vFacturas,fiados:vFiados,devolver:vDevolver,gasto:vGasto,reporte:vReporte,cerrar:vCerrar})[tab]();
+  ({panel:vPanel,inv:vInv,compras:vCompras,vender:vVender,facturas:vFacturas,fiados:vFiados,auto:vAuto,devolver:vDevolver,gasto:vGasto,reporte:vReporte,cerrar:vCerrar})[tab]();
 }
 
 /* ---------- Vender ---------- */
@@ -289,13 +291,13 @@ async function vFacturas(){
     const L=(data||[]).filter(f=>(!facSin||(digital(f.metodo_pago)&&!f.n_comprobantes&&!f.ref_pasarela))&&(!t||[f.numero_factura,f.cliente,f.cajero].some(x=>String(x||'').toLowerCase().includes(t))));
     const tot=L.reduce((a,f)=>a+Number(f.total_facturado),0),dev=L.reduce((a,f)=>a+Number(f.devuelto),0);
     $('#fb').innerHTML=(L.length?`<div class="line"><span class="sp"><b>${pl(L.length,'factura')}</b><div class="mu">${L.length>=500?'Se muestran las 500 más recientes. ':''}${dev>0?'Devuelto '+cop(dev):'Sin devoluciones'}</div></span><b>${cop(tot-dev)}</b></div>`:'')+
-     (L.length?L.map(f=>`<button class="g" data-f="${f.id_factura}" style="width:100%;text-align:left;margin-bottom:6px"><b>${esc(f.numero_factura)}</b> · ${cop(f.total_facturado)} · ${esc(f.metodo_pago)}${f.cliente?' · '+esc(f.cliente):''}<br><span class="mu">${hora(f.fecha_emision)}${adm?' · '+esc(f.sucursal)+' · '+esc(f.cajero||'—'):''} · ${f.unidades} ${Number(f.unidades)===1?'unidad':'unidades'}${Number(f.devuelto)>0?' · devuelto '+cop(f.devuelto):''}${f.n_comprobantes>0?' · 📎 '+f.n_comprobantes:f.ref_pasarela?' · 🔗 '+esc(f.ref_pasarela):digital(f.metodo_pago)?' · <b class="wa">⚠ sin comprobante</b>':''}</span></button>`).join(''):'<span class="mu">No hay facturas en este periodo.</span>');
+     (L.length?L.map(f=>`<button class="g" data-f="${f.id_factura}" style="width:100%;text-align:left;margin-bottom:6px"><b>${esc(f.numero_factura)}</b> · ${cop(f.total_facturado)} · ${esc(f.metodo_pago)}${f.cliente?' · '+esc(f.cliente):''}<br><span class="mu">${hora(f.fecha_emision)}${adm?' · '+esc(f.sucursal)+' · '+esc(f.cajero||'—'):''} · ${f.unidades} ${Number(f.unidades)===1?'unidad':'unidades'}${Number(f.devuelto)>0?' · devuelto '+cop(f.devuelto):''}${f.n_comprobantes>0?' · 📎 '+f.n_comprobantes:f.ref_pasarela?(f.verificacion==='Por verificar'?' · <b class="wa">⏳ por verificar</b>':f.verificacion==='Dudoso'?' · <b class="er">❗ dudoso</b>':f.verificacion==='Verificado'?' · ✅ verificado':' · 🔗 '+esc(f.ref_pasarela)):digital(f.metodo_pago)?' · <b class="wa">⚠ sin comprobante</b>':''}</span></button>`).join(''):'<span class="mu">No hay facturas en este periodo.</span>');
     $('#fb').querySelectorAll('[data-f]').forEach(b=>b.onclick=async()=>{
       const f=L.find(x=>String(x.id_factura)===b.dataset.f);const r=await call('devolucion_disponible',{p_id_factura:f.id_factura});if(!r.data)return;
       const x=r.data;const m=modal(`<h2>${esc(x.numero_factura)}</h2><p class="mu">${hora(x.fecha_emision)} · ${esc(x.metodo_pago)}${f.cliente?' · '+esc(f.cliente):''}${adm?' · '+esc(f.sucursal)+' · '+esc(f.cajero||'—'):''}</p>`+
        x.lineas.map(l=>`<div class="line"><span class="sp">${esc(l.nombre)}<div class="mu">${l.vendida} × ${cop(l.precio)}${l.devuelta?' · devueltas '+l.devuelta:''}</div></span>${cop(l.vendida*l.precio)}</div>`).join('')+
        `<div class="line"><span class="sp"><b>Total</b></span><b>${cop(x.total)}</b></div>${Number(f.devuelto)>0?`<div class="line"><span class="sp">Devuelto</span>${cop(f.devuelto)}</div>`:''}
-        ${f.ref_pasarela?`<div class="line"><span class="sp">Pasarela de pago</span><b>${esc(f.ref_pasarela)}</b></div>`:''}${(digital(f.metodo_pago)&&!f.ref_pasarela)||f.n_comprobantes>0?`<div class="line"><span class="sp">Comprobantes</span><b>${f.n_comprobantes>0?'📎 '+f.n_comprobantes:'<span class="wa">⚠ ninguno</span>'}</b></div>${f.n_comprobantes>0?'<button class="g" id="fv" style="width:100%;margin-top:6px">Ver comprobantes</button>':''}<div id="adj"></div>`:''}
+        ${f.ref_pasarela?`<div class="line"><span class="sp">${f.verificacion&&f.verificacion!=='No aplica'?'Referencia Bre-B · '+esc(f.verificacion):'Pasarela de pago'}</span><b>${esc(f.ref_pasarela)}</b></div>`:''}${(digital(f.metodo_pago)&&!f.ref_pasarela)||f.n_comprobantes>0?`<div class="line"><span class="sp">Comprobantes</span><b>${f.n_comprobantes>0?'📎 '+f.n_comprobantes:'<span class="wa">⚠ ninguno</span>'}</b></div>${f.n_comprobantes>0?'<button class="g" id="fv" style="width:100%;margin-top:6px">Ver comprobantes</button>':''}<div id="adj"></div>`:''}
         <input id="ft" type="tel" inputmode="tel" placeholder="WhatsApp del cliente (opcional)" style="margin-top:10px">
         <button id="fw" style="width:100%">Enviar por WhatsApp</button>
         <button class="g" id="fx" style="width:100%;margin-top:6px">Cerrar</button>`);
@@ -354,6 +356,74 @@ async function verCliente(id){
           botonComprobante(m2.querySelector('#adj'),{id_movimiento:a.data.id_movimiento},()=>{m2.querySelector('#adj').innerHTML='<p class="ok"><b>✓ Comprobante guardado</b></p>'})}}};
     const w=m.querySelector('#aw');if(w)w.onclick=()=>window.open(waCobro(e,e.saldo),'_blank','noopener');
   }
+}
+
+
+/* ---------- Autoservicio (dueño): conciliar comprobantes Bre-B, aprobar clientes de fiado y configurar el cobro ---------- */
+async function vAuto(){
+  $('#body').innerHTML='<div class="card"><span class="mu">Cargando…</span></div>';
+  const [sd,pg,cl]=await Promise.all([
+    db.from('sucursales').select('id_sucursal,nombre_sucursal,modo_pago_auto,llave_breb,titular_breb,tope_sin_verificar').eq('autoservicio',true).order('id_sucursal'),
+    db.from('pagos_autoservicio').select('id_pago,referencia,total,metodo_pago,verificacion,ref_cliente,ruta_captura,creado,estado,nota_verificacion').in('verificacion',['Por verificar','Dudoso','Verificado']).order('creado',{ascending:false}).limit(150),
+    db.rpc('autoservicio_clientes')]);
+  if(sd.error||pg.error||cl.error){toast((sd.error||pg.error||cl.error).message,true);return}
+  const sedes=sd.data||[],pagos=pg.data||[],clientes=cl.data||[];
+  if(!sedes.length){$('#body').innerHTML='<div class="card"><h2>Autoservicio</h2><p class="mu">No hay una sede de autoservicio configurada.</p></div>';return}
+  const por=pagos.filter(x=>x.verificacion==='Por verificar'),dud=pagos.filter(x=>x.verificacion==='Dudoso'),ver=pagos.filter(x=>x.verificacion==='Verificado');
+  const pend=clientes.filter(x=>x.estado==='Pendiente');
+  const subs=[['verificar','Por verificar ('+por.length+')'],['dudosos','Dudosos ('+dud.length+')'],['verificados','Verificados'],['clientes','Clientes'+(pend.length?' ('+pend.length+' nuevos)':'')],['config','Configurar']];
+  const sum=a=>cop(a.reduce((t,x)=>t+Number(x.total),0));
+  let h=`<div class="card"><h2>Autoservicio</h2><div class="kpis" style="margin-bottom:8px"><div><span class="mu">Por verificar</span><b>${sum(por)}</b><span class="mu">${pl(por.length,'pago')}</span></div>
+    <div><span class="mu">Dudosos</span><b class="${dud.length?'er':''}">${sum(dud)}</b><span class="mu">${pl(dud.length,'pago')}</span></div>
+    <div><span class="mu">Clientes por aprobar</span><b>${pend.length}</b></div></div>
+    <div class="chips">${subs.map(t=>`<button data-as="${t[0]}" class="${autoSub===t[0]?'':'g'} s">${t[1]}</button>`).join('')}</div></div>`;
+  const filaPago=x=>`<div class="line"><span class="sp"><b>${cop(x.total)}</b> · ${esc(x.ref_cliente||x.referencia)}<div class="mu">${hora(x.creado)}${x.estado!=='Aprobado'?' · <b class="wa">'+esc(x.estado)+'</b>':''}${x.nota_verificacion?' · '+esc(x.nota_verificacion):''}</div></span><button class="g s" data-cp="${x.id_pago}">${x.verificacion==='Verificado'?'Ver':'Revisar'}</button></div>`;
+  if(autoSub==='verificar'||autoSub==='dudosos'||autoSub==='verificados'){
+    const L=autoSub==='verificar'?por:autoSub==='dudosos'?dud:ver;
+    h+=`<div class="card">${autoSub==='verificar'?'<p class="mu" style="margin-top:0">Compara el <b>monto</b> y la <b>referencia</b> de cada captura con los movimientos reales de tu cuenta (Bre-B/Nequi). Lo que no aparezca, márcalo como dudoso.</p>':''}${L.length?L.map(filaPago).join(''):'<span class="mu">Nada por aquí.</span>'}</div>`}
+  if(autoSub==='clientes'){
+    h+=`<div class="card"><h2>Clientes de fiado (autoservicio)</h2><p class="mu" style="margin-top:0">Se registran con Google. Antes de aprobar, escríbeles o llámalos para confirmar que el celular es suyo.</p>
+      ${clientes.length?clientes.map(c=>`<div style="padding:8px 0;border-bottom:1px solid var(--bd)"><div><b>${esc(c.nombre)}</b> · <span class="${c.estado==='Aprobado'?'ok':c.estado==='Rechazado'?'er':'wa'}">${esc(c.estado)}</span></div>
+        <div class="mu">${esc(c.telefono||'')} · ${esc(c.email||'')} · ${hora(c.creado)}${c.estado==='Aprobado'?' · cupo '+cop(c.cupo)+' · debe '+cop(c.saldo):''}</div>
+        <div class="row" style="margin-top:4px"><input type="number" inputmode="decimal" min="0" placeholder="Cupo $" value="${c.estado==='Aprobado'?c.cupo:''}" data-cu="${c.id_cliente}" style="width:110px;margin:0">
+          <button class="s" data-ok="${c.id_cliente}">${c.estado==='Aprobado'?'Cambiar cupo':'Aprobar'}</button>
+          ${c.estado!=='Rechazado'?`<button class="g s" data-no="${c.id_cliente}">${c.estado==='Aprobado'?'Bloquear':'Rechazar'}</button>`:''}
+          ${c.telefono?`<button class="g s" data-wa="${c.id_cliente}">WhatsApp</button>`:''}</div></div>`).join(''):'<span class="mu">Aún no hay clientes registrados.</span>'}</div>`}
+  if(autoSub==='config'){
+    h+=sedes.map(x=>{const url=new URL('autoservicio.html?s='+x.id_sucursal,location.href).href;
+      return `<div class="card"><h2>${esc(x.nombre_sucursal)}</h2>
+      <label class="mu">Cómo cobra esta tienda</label><select data-cm="${x.id_sucursal}"><option value="comprobante" ${x.modo_pago_auto==='comprobante'?'selected':''}>Bre-B con comprobante (gratis, se verifica después)</option><option value="pasarela" ${x.modo_pago_auto==='pasarela'?'selected':''}>Pasarela de pago (automático, con comisión)</option></select>
+      <label class="mu">Llave Bre-B</label><input data-cl="${x.id_sucursal}" value="${esc(x.llave_breb||'')}" placeholder="@mi-tienda">
+      <label class="mu">Nombre del titular (el cliente lo ve para confirmar)</label><input data-ct="${x.id_sucursal}" value="${esc(x.titular_breb||'')}">
+      <label class="mu">Compra máxima sin verificar ($)</label><input type="number" inputmode="decimal" data-cx="${x.id_sucursal}" value="${x.tope_sin_verificar}">
+      <button style="width:100%" data-cg="${x.id_sucursal}">Guardar</button>
+      <p class="mu">Enlace para el código QR de la tienda:</p><input readonly value="${esc(url)}" onclick="this.select()"><button class="g" style="width:100%" data-cc="${esc(url)}">Copiar enlace</button></div>`}).join('')}
+  $('#body').innerHTML=h;
+  $('#body').querySelectorAll('[data-as]').forEach(b=>b.onclick=()=>{autoSub=b.dataset.as;vAuto()});
+  $('#body').querySelectorAll('[data-cp]').forEach(b=>b.onclick=()=>verCaptura(pagos.find(x=>x.id_pago===b.dataset.cp)));
+  const decidir=async(id,ap)=>{const cu=ap?Number($('#body').querySelector('[data-cu="'+id+'"]').value):null;
+    const r=await call('autoservicio_decidir_cliente',{p_id_cliente:id,p_aprobar:ap,p_cupo:cu});if(r.data){toast(ap?'Cliente aprobado':'Cliente bloqueado');await refresh()}};
+  $('#body').querySelectorAll('[data-ok]').forEach(b=>b.onclick=()=>decidir(Number(b.dataset.ok),true));
+  $('#body').querySelectorAll('[data-no]').forEach(b=>b.onclick=()=>decidir(Number(b.dataset.no),false));
+  $('#body').querySelectorAll('[data-wa]').forEach(b=>b.onclick=()=>{const c=clientes.find(x=>String(x.id_cliente)===b.dataset.wa);
+    window.open('https://wa.me/'+waTel(c.telefono)+'?text='+encodeURIComponent(`Hola ${c.nombre}, te escribimos de ${perfil.nombre_comercial}. Recibimos tu solicitud para comprar a fiado en el autoservicio. ¿Eres tú? Te confirmamos tu cupo por este medio.`),'_blank','noopener')});
+  $('#body').querySelectorAll('[data-cg]').forEach(b=>b.onclick=async()=>{const id=b.dataset.cg,q=k=>$('#body').querySelector('[data-'+k+'="'+id+'"]');
+    const r=await call('autoservicio_configurar',{p_sucursal:Number(id),p_modo:q('cm').value,p_llave:q('cl').value,p_titular:q('ct').value,p_tope:Number(q('cx').value)});if(r.data){toast('Configuración guardada');vAuto()}});
+  $('#body').querySelectorAll('[data-cc]').forEach(b=>b.onclick=async()=>{try{await navigator.clipboard.writeText(b.dataset.cc);toast('Enlace copiado')}catch(e){toast('Selecciona y copia el enlace',true)}});
+}
+async function verCaptura(x){
+  const m=modal(`<h2>Comprobante Bre-B</h2><div class="line"><span class="sp">Monto</span><b>${cop(x.total)}</b></div>
+    <div class="line"><span class="sp">Referencia</span><b>${esc(x.ref_cliente||'—')}</b></div><div class="line"><span class="sp">Enviado</span>${hora(x.creado)}</div>
+    <div id="im" style="margin:8px 0"><span class="mu">Cargando captura…</span></div>
+    ${x.verificacion==='Verificado'?'<p class="ok"><b>✓ Verificado</b></p>':`<input id="vn" placeholder="Nota (opcional)" value="${esc(x.nota_verificacion||'')}">
+      <button id="v1" style="width:100%">✓ Sí llegó el pago</button><button class="g" id="v2" style="width:100%;margin-top:6px">❗ No llegó / dudoso</button>`}
+    <button class="g" id="vx" style="width:100%;margin-top:6px">Cerrar</button>`);
+  m.querySelector('#vx').onclick=()=>m.remove();
+  const {data,error}=await db.storage.from('capturas-autoservicio').createSignedUrl(x.ruta_captura,300);
+  m.querySelector('#im').innerHTML=error?`<p class="er">No se pudo abrir la captura: ${esc(error.message)}</p>`:`<a href="${esc(data.signedUrl)}" target="_blank" rel="noopener"><img src="${esc(data.signedUrl)}" alt="Captura del pago" style="width:100%;border-radius:8px"></a>`;
+  const dec=async res=>{const r=await call('autoservicio_verificar',{p_id_pago:x.id_pago,p_resultado:res,p_nota:m.querySelector('#vn').value||null});
+    if(r.data){m.remove();toast(res==='Verificado'?'Pago verificado':'Marcado como dudoso');await refresh()}};
+  const a=m.querySelector('#v1'),b=m.querySelector('#v2');if(a)a.onclick=()=>dec('Verificado');if(b)b.onclick=()=>dec('Dudoso');
 }
 
 /* ---------- Devoluciones (nota crédito) ---------- */

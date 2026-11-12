@@ -106,10 +106,12 @@ async function camara(o){
   return {m,cerrar};
 }
 
-/* ---------- Autoservicio: el cliente escanea, paga en la pasarela y recibe su comprobante (sin cuenta, sin app) ---------- */
+/* ---------- Autoservicio: el cliente escanea, paga (Bre-B con comprobante o pasarela) o fía con su cuenta de Google ---------- */
 const SEDE=Number(new URLSearchParams(location.search).get('s'));
-let db,tienda=null,cart=new Map(),pago=null,metodo='Nequi',busy=false,verQ='';
-const store={get(){try{return sessionStorage.getItem('surtify_pago')}catch(e){return null}},set(v){try{v?sessionStorage.setItem('surtify_pago',v):sessionStorage.removeItem('surtify_pago')}catch(e){}}};
+let db,tienda=null,cart=new Map(),pago=null,metodo='Nequi',busy=false,verQ='',cuenta=null,sesion=null,ruta=null;
+const ss={get(k){try{return sessionStorage.getItem(k)}catch(e){return null}},set(k,v){try{v?sessionStorage.setItem(k,v):sessionStorage.removeItem(k)}catch(e){}}};
+const store={get:()=>ss.get('surtify_pago'),set:v=>ss.set('surtify_pago',v)};
+const guardarCarro=()=>ss.set('surtify_cart',cart.size?JSON.stringify([...cart.values()].map(x=>[x.p.id_producto,x.qty])):null);
 const unidades=()=>[...cart.values()].reduce((a,x)=>a+x.qty,0);
 const total=()=>[...cart.values()].reduce((a,x)=>a+x.qty*x.p.precio,0);
 const cab=()=>`<div class="hd"><img class="logo" src="assets/logo.png" alt="Surtify"><span class="sp"></span></div><div class="mu who">${esc(tienda.comercio)} · ${esc(tienda.sucursal)} · Autoservicio</div>`;
@@ -118,19 +120,39 @@ async function rpc(fn,args){const {data,error}=await db.rpc(fn,args||{});if(erro
 async function init(){
   const c=window.SURTIFY||{};
   if(!SEDE){app.innerHTML='<div class="card"><h2>Falta la tienda</h2><p>Escanea el código QR que está en la entrada de la tienda.</p></div>';return}
-  db=supabase.createClient(c.SUPABASE_URL,c.SUPABASE_ANON_KEY);
+  db=supabase.createClient(c.SUPABASE_URL,c.SUPABASE_ANON_KEY,{auth:{storageKey:'surtify-cliente',persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
   tienda=await rpc('autoservicio_catalogo',{p_sucursal:SEDE});
   if(!tienda){app.innerHTML='<div class="card"><h2>Tienda no disponible</h2><p class="mu">Esta tienda no tiene autoservicio o el enlace no es correcto.</p></div>';return}
+  try{const s=await db.auth.getSession();sesion=s.data&&s.data.session?s.data.session.user:null}catch(e){sesion=null}
+  try{const g=JSON.parse(ss.get('surtify_cart')||'null');(g||[]).forEach(([id,q])=>{const p=tienda.productos.find(p=>p.id_producto===id);if(p&&q>0)cart.set(id,{p,qty:Math.min(q,p.stock)})})}catch(e){}
+  if(sesion)await cargarCuenta();
   const prev=store.get();
   if(prev){const e=await rpc('autoservicio_estado',{p_id_pago:prev});
     if(e&&e.estado==='Aprobado'){return comprobante(e)}
-    if(e&&e.estado==='Pendiente'){pago={id_pago:prev,referencia:e.referencia,total:e.total};return pasarela()}
+    if(e&&e.estado==='Pendiente'){pago={id_pago:prev,referencia:e.referencia,total:e.total,llave_breb:e.llave_breb,titular_breb:e.titular_breb,modo:e.modo};return pago.modo==='comprobante'?breb():pasarela()}
     store.set(null)}
   vCarrito();
 }
+async function cargarCuenta(){cuenta=await rpc('autoservicio_mi_cuenta',{p_sucursal:SEDE})}
+async function entrarGoogle(){guardarCarro();
+  const {error}=await db.auth.signInWithOAuth({provider:'google',options:{redirectTo:location.origin+location.pathname+'?s='+SEDE}});
+  if(error)toast('No se pudo iniciar con Google: '+error.message,true)}
+async function salir(){await db.auth.signOut();sesion=null;cuenta=null;vCarrito()}
 
 function add(p){const x=cart.get(p.id_producto);
-  if(x){if(x.qty>=p.stock){toast(p.nombre+': solo quedan '+p.stock,true);return false}x.qty++}else cart.set(p.id_producto,{p,qty:1});return true}
+  if(x){if(x.qty>=p.stock){toast(p.nombre+': solo quedan '+p.stock,true);return false}x.qty++}else cart.set(p.id_producto,{p,qty:1});guardarCarro();return true}
+
+function bloqueFiado(T){
+  if(!sesion)return `<div class="card"><h2>¿Eres cliente de la casa?</h2><p class="mu" style="margin-top:0">Si tienes cupo de fiado, entra con tu cuenta de Google y anota la compra a tu nombre.</p><button class="g big" id="gl">Entrar con Google</button></div>`;
+  const quien=`<div class="mu" style="margin-top:8px">${esc(cuenta&&cuenta.nombre||sesion.email||'')} · <a href="#" id="so">Salir</a></div>`;
+  if(!cuenta)return `<div class="card"><h2>Tu cuenta</h2><p class="mu">No pudimos consultar tu cuenta.</p>${quien}</div>`;
+  if(!cuenta.registrado)return `<div class="card"><h2>Comprar a fiado</h2><p class="mu" style="margin-top:0">Pide tu cupo: el dueño de la tienda lo revisa y te avisa.</p><button class="big" id="rg">Solicitar fiado</button>${quien}</div>`;
+  if(cuenta.estado==='Pendiente')return `<div class="card alert"><h2 class="wa">Solicitud en revisión</h2><p>La tienda revisará tu solicitud y te llamará o escribirá al ${esc(cuenta.telefono)}. Mientras tanto puedes pagar con Bre-B.</p>${quien}</div>`;
+  if(cuenta.estado==='Rechazado')return `<div class="card"><h2>Fiado no disponible</h2><p class="mu">La tienda no habilitó el fiado para tu cuenta. Habla con el personal si crees que es un error.</p>${quien}</div>`;
+  const ok=cart.size&&T<=cuenta.disponible;
+  return `<div class="card"><h2>Fiar a mi cuenta</h2><div class="line"><span class="sp">Cupo disponible</span><b>${cop(cuenta.disponible)}</b></div><div class="mu">Debes ${cop(cuenta.saldo)} de un cupo de ${cop(cuenta.cupo)}.</div>
+    <button class="big" id="fi" style="margin-top:8px" ${ok?'':'disabled'}>Fiar ${cart.size?cop(T):''}</button>${cart.size&&T>cuenta.disponible?'<p class="er mu">Esta compra supera tu cupo disponible.</p>':''}${quien}</div>`}
+
 function vCarrito(){
   const T=total();
   app.innerHTML=cab()+`<div class="card"><h2>Tu compra</h2>
@@ -141,7 +163,7 @@ function vCarrito(){
     <div class="card"><h2>Carrito (${unidades()})</h2>${cart.size?[...cart.values()].map(x=>`<div class="line"><span class="sp">${esc(x.p.nombre)}<div class="mu">${cop(x.p.precio)} c/u</div></span>
       <span class="qty"><button class="g s" data-m="${x.p.id_producto}">−</button><b>${x.qty}</b><button class="g s" data-a="${x.p.id_producto}">+</button></span><b style="min-width:84px;text-align:right">${cop(x.qty*x.p.precio)}</b></div>`).join(''):'<span class="mu">Escanea un producto para empezar.</span>'}
       <div class="line"><span class="sp"><b>Total</b><div class="mu">IVA incluido</div></span><span class="tot">${cop(T)}</span></div>
-      <button class="big" id="pg" ${cart.size?'':'disabled'}>Pagar ${cart.size?cop(T):''}</button></div>`;
+      <button class="big" id="pg" ${cart.size?'':'disabled'}>Pagar ${cart.size?cop(T):''}</button></div>`+bloqueFiado(T);
   const porId=id=>tienda.productos.find(p=>p.id_producto===Number(id));
   const lista=()=>{const t=verQ.trim().toLowerCase();$('#lp').innerHTML=tienda.productos.filter(p=>!t||p.nombre.toLowerCase().includes(t)).map(p=>`<button class="p" data-p="${p.id_producto}">${esc(p.nombre)}<small>${cop(p.precio)}</small></button>`).join('')||'<span class="mu">Sin resultados</span>';
     $('#lp').querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{if(add(porId(b.dataset.p)))vCarrito()})};
@@ -155,12 +177,79 @@ function vCarrito(){
     alLeer:cod=>{const p=porCodigo(cod);if(!p){toast('Código '+cod+' no registrado',true);return}
       if(add(p)){pitido();toast('✓ '+p.nombre);const n=document.getElementById('sn');if(n)n.textContent=unidades()}}});
   app.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{if(add(porId(b.dataset.a)))vCarrito()});
-  app.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{const x=cart.get(Number(b.dataset.m));x.qty--;if(x.qty<=0)cart.delete(x.p.id_producto);vCarrito()});
+  app.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{const x=cart.get(Number(b.dataset.m));x.qty--;if(x.qty<=0)cart.delete(x.p.id_producto);guardarCarro();vCarrito()});
+  const items=()=>[...cart.values()].map(x=>({id_producto:x.p.id_producto,cantidad:x.qty}));
   $('#pg').onclick=async e=>{if(busy)return;busy=true;e.target.disabled=true;
-    const r=await rpc('autoservicio_crear_pago',{p_sucursal:SEDE,p_items:[...cart.values()].map(x=>({id_producto:x.p.id_producto,cantidad:x.qty}))});
+    const r=await rpc('autoservicio_crear_pago',{p_sucursal:SEDE,p_items:items()});
     busy=false;if(!r){e.target.disabled=false;return}
-    pago=r;store.set(r.id_pago);pasarela()};
+    pago=r;store.set(r.id_pago);r.modo==='comprobante'?breb():pasarela()};
+  const gl=$('#gl');if(gl)gl.onclick=entrarGoogle;
+  const so=$('#so');if(so)so.onclick=e=>{e.preventDefault();salir()};
+  const rg=$('#rg');if(rg)rg.onclick=registro;
+  const fi=$('#fi');if(fi)fi.onclick=async()=>{if(busy)return;busy=true;fi.disabled=true;
+    const r=await rpc('autoservicio_crear_pago',{p_sucursal:SEDE,p_items:items(),p_fiado:true});busy=false;
+    if(!r){fi.disabled=false;return}
+    if(r.estado==='Aprobado'){const e=await rpc('autoservicio_estado',{p_id_pago:r.id_pago});if(e){cart.clear();guardarCarro();await cargarCuenta();return comprobante(e)}}
+    toast(r.motivo||'No se pudo fiar esta compra',true);await cargarCuenta();vCarrito()};
 }
+
+function registro(){
+  const m=modal(`<h2>Solicitar fiado</h2><p class="mu">Para fiar necesitamos saber quién eres. El dueño confirmará tu celular antes de darte cupo.</p>
+    <label>Nombre completo<input id="rn" value="${esc((cuenta&&cuenta.nombre)||(sesion&&sesion.user_metadata&&sesion.user_metadata.full_name)||'')}" autocomplete="name"></label>
+    <label>Celular<input id="rt" inputmode="tel" placeholder="3001234567" autocomplete="tel"></label>
+    <label style="display:flex;align-items:flex-start;margin:8px 0"><input type="checkbox" id="ra" style="margin-top:3px"><span class="mu">Autorizo a ${esc(tienda.comercio)} a tratar mi nombre, celular y correo para gestionar mi crédito de fiado, según la Ley 1581 de 2012 (habeas data). Puedo pedir que borren mis datos cuando quiera.</span></label>
+    <button class="big" id="rs">Enviar solicitud</button><button class="g" id="rx" style="width:100%;margin-top:8px">Cancelar</button>`);
+  m.querySelector('#rx').onclick=()=>m.remove();
+  m.querySelector('#rs').onclick=async e=>{if(busy)return;
+    if(m.querySelector('#rn').value.trim().length<3){toast('Escribe tu nombre completo',true);return}
+    if(!/^(\+?57)?3\d{9}$/.test(m.querySelector('#rt').value.replace(/[\s-]/g,''))){toast('Escribe un celular colombiano de 10 dígitos (3001234567)',true);return}
+    if(!m.querySelector('#ra').checked){toast('Debes autorizar el tratamiento de tus datos para continuar',true);return}
+    busy=true;e.target.disabled=true;
+    const r=await rpc('autoservicio_registrar_cliente',{p_sucursal:SEDE,p_nombre:m.querySelector('#rn').value,p_telefono:m.querySelector('#rt').value,p_acepta:m.querySelector('#ra').checked});
+    busy=false;if(!r){e.target.disabled=false;return}
+    m.remove();toast('Solicitud enviada. La tienda te contactará.');await cargarCuenta();vCarrito()};
+}
+
+/* Pantalla Bre-B: el cliente paga a la llave de la tienda con su propia app y sube la captura. El dueño verifica después. */
+function breb(){
+  const ya=ruta&&ruta.id===pago.id_pago;
+  app.innerHTML=cab()+`<div class="card"><h2>Paga con Bre-B</h2>
+    <div class="line"><span class="sp"><b>Total a pagar</b></span><span class="tot">${cop(pago.total)}</span></div>
+    <div class="line"><span class="sp">Llave Bre-B<div class="mu">Titular: ${esc(pago.titular_breb||tienda.titular_breb||'')}</div></span><b id="lk">${esc(pago.llave_breb||tienda.llave_breb||'')}</b><button class="g s" id="cl">Copiar</button></div>
+    <ol class="mu" style="padding-left:18px;margin:8px 0"><li>Abre la app de tu banco, Nequi o Daviplata y paga <b>exactamente ${cop(pago.total)}</b> a esa llave.</li><li>Verifica que el nombre del titular coincida.</li><li>Toma o sube la captura del pago y escribe el número de referencia.</li></ol>
+    <label>Captura del pago<input type="file" id="ar" accept="image/*"></label>
+    <img id="pv" alt="" hidden style="width:100%;max-height:260px;object-fit:contain;border-radius:8px;margin-bottom:8px">
+    <label>Referencia del movimiento<input id="rf" placeholder="Ej. M12345678" autocapitalize="characters" autocomplete="off"></label>
+    <button class="big" id="en">Ya pagué, enviar comprobante</button>
+    <p class="mu">Tu compra queda registrada como <b>por verificar</b>: el dueño confirma que el dinero llegó. Enviar un comprobante falso es fraude.</p>
+    <button class="g" id="cx" style="width:100%;margin-top:4px">Cancelar y volver al carrito</button></div>`;
+  $('#cl').onclick=async()=>{try{await navigator.clipboard.writeText($('#lk').textContent);toast('Llave copiada')}catch(e){toast('Mantén presionada la llave para copiarla',true)}};
+  $('#cx').onclick=()=>{store.set(null);pago=null;ruta=null;vCarrito()};
+  let blob=null;
+  $('#ar').onchange=async e=>{const f=e.target.files[0];blob=null;$('#pv').hidden=true;if(!f)return;
+    try{blob=await comprimir(f);$('#pv').src=URL.createObjectURL(blob);$('#pv').hidden=false}catch(err){toast('No se pudo leer la imagen',true)}};
+  $('#en').onclick=async e=>{if(busy)return;
+    const rf=$('#rf').value.trim();if(!blob&&!ya){toast('Sube la captura del pago',true);return}if(rf.length<6){toast('Escribe la referencia del movimiento',true);return}
+    busy=true;e.target.disabled=true;e.target.textContent='Enviando…';
+    try{
+      if(!ya||blob){const p=pago.id_pago+'/'+Date.now()+'.jpg';
+        const up=await db.storage.from('capturas-autoservicio').upload(p,blob,{contentType:'image/jpeg'});
+        if(up.error)throw new Error('No se pudo subir la captura: '+up.error.message);ruta={id:pago.id_pago,p}}
+      const r=await rpc('autoservicio_enviar_comprobante',{p_id_pago:pago.id_pago,p_referencia:rf,p_ruta:ruta.p});
+      if(!r)throw new Error('');
+      const est=await rpc('autoservicio_estado',{p_id_pago:pago.id_pago});
+      if(est&&(est.estado==='Aprobado'||est.estado==='Pago sin venta')){cart.clear();guardarCarro();store.set(null);ruta=null;
+        if(est.estado==='Aprobado')return comprobante(est);
+        app.innerHTML=cab()+`<div class="card alert"><h2 class="wa">Revisa con el personal</h2><p>${esc(est.nota||'')}</p><p class="mu">Referencia ${esc(est.referencia)}</p></div>`;return}
+      throw new Error('No se pudo confirmar el registro. Habla con el personal.');
+    }catch(err){if(err.message)toast(err.message,true)}
+    busy=false;e.target.disabled=false;e.target.textContent='Ya pagué, enviar comprobante'};
+}
+/* Reduce la foto antes de subirla (celulares dan 4-8 MB; el límite es 3 MB) */
+function comprimir(file){return new Promise((ok,no)=>{const img=new Image(),u=URL.createObjectURL(file);
+  img.onload=()=>{const M=1400,k=Math.min(1,M/Math.max(img.width,img.height)),c=document.createElement('canvas');c.width=Math.round(img.width*k);c.height=Math.round(img.height*k);
+    c.getContext('2d').drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(u);c.toBlob(b=>b?ok(b):no(new Error('x')),'image/jpeg',.8)};
+  img.onerror=()=>{URL.revokeObjectURL(u);no(new Error('x'))};img.src=u})}
 
 /* Pantalla de la pasarela. Con una pasarela real (Wompi, etc.) aquí se redirige al checkout del proveedor;
    el aviso de pago llega al servidor por webhook y esta página solo consulta el estado. */
@@ -189,24 +278,29 @@ async function resultado(){
   let e=null;
   for(let i=0;i<8;i++){e=await rpc('autoservicio_estado',{p_id_pago:pago.id_pago});if(!e||e.estado!=='Pendiente')break;await new Promise(r=>setTimeout(r,1500))}
   if(!e){return pasarela()}
-  if(e.estado==='Aprobado'){cart.clear();store.set(null);return comprobante(e)}
-  if(e.estado==='Pago sin venta'){store.set(null);cart.clear();app.innerHTML=cab()+`<div class="card alert"><h2 class="wa">Revisa con el personal</h2><p>${esc(e.nota||'')}</p><p class="mu">Referencia ${esc(e.referencia)} · ${esc(e.ref_externa||'')}</p></div>`;return}
+  if(e.estado==='Aprobado'){cart.clear();guardarCarro();store.set(null);return comprobante(e)}
+  if(e.estado==='Pago sin venta'){store.set(null);cart.clear();guardarCarro();app.innerHTML=cab()+`<div class="card alert"><h2 class="wa">Revisa con el personal</h2><p>${esc(e.nota||'')}</p><p class="mu">Referencia ${esc(e.referencia)} · ${esc(e.ref_externa||'')}</p></div>`;return}
   if(e.estado==='Rechazado'||e.estado==='Vencido'){store.set(null);pago=null;
     app.innerHTML=cab()+`<div class="card"><h2 class="er">${e.estado==='Rechazado'?'Pago rechazado':'El pago venció'}</h2><p>No se te cobró nada. Tu carrito sigue ahí para que lo intentes otra vez.</p><button class="big" id="rt">Volver al carrito</button></div>`;
     $('#rt').onclick=vCarrito;return}
   pasarela();
 }
 function comprobante(e){
+  const fiado=e.metodo_pago==='Fiado',pv=e.verificacion==='Por verificar',du=e.verificacion==='Dudoso';
+  const pie=fiado?`Compra a fiado · Ref. ${e.referencia}`:`Pago: ${e.metodo_pago} · Ref. ${e.ref_externa}${pv?' (por verificar)':''}`;
   const wa='https://wa.me/?text='+encodeURIComponent([`*${e.comercio}*`,`Comprobante de venta ${e.numero_factura}`,fechaLarga(e.fecha_emision)+' · '+e.sucursal,'',
-    ...e.lineas.map(l=>`${l.cantidad} × ${l.nombre} — ${cop(l.cantidad*l.precio)}`),'',`*Total: ${cop(e.total)}* (IVA incluido)`,`Pago: ${e.metodo_pago} · Ref. ${e.ref_externa}`,'','¡Gracias por tu compra!'].join('\n'));
-  app.innerHTML=cab()+`<div class="card"><div class="check ok">✓</div><h2 class="ok" style="text-align:center">¡Pago aprobado!</h2>
-    <p class="mu" style="text-align:center">Ya puedes llevarte tus productos. Muestra este comprobante si te lo piden.</p>
+    ...e.lineas.map(l=>`${l.cantidad} × ${l.nombre} — ${cop(l.cantidad*l.precio)}`),'',`*Total: ${cop(e.total)}* (IVA incluido)`,pie,'','¡Gracias por tu compra!'].join('\n'));
+  const titulo=fiado?'¡Compra anotada a tu cuenta!':pv?'Pago recibido':du?'Pago en revisión':'¡Pago aprobado!';
+  const sub=fiado?'Ya puedes llevarte tus productos. Quedó en tu cuenta de fiado.':pv?'Ya puedes llevarte tus productos. La tienda confirmará que el dinero llegó.':du?'La tienda no pudo confirmar tu pago. Habla con el personal.':'Ya puedes llevarte tus productos. Muestra este comprobante si te lo piden.';
+  app.innerHTML=cab()+`<div class="card"><div class="check ${du?'wa':pv?'wa':'ok'}">${du?'!':pv?'⏳':'✓'}</div><h2 class="${du||pv?'wa':'ok'}" style="text-align:center">${titulo}</h2>
+    <p class="mu" style="text-align:center">${sub}</p>
     <div class="line"><span class="sp">Comprobante</span><b>${esc(e.numero_factura)}</b></div>
     <div class="line"><span class="sp">Fecha</span>${fechaLarga(e.fecha_emision)}</div>
     ${e.lineas.map(l=>`<div class="line"><span class="sp">${esc(l.nombre)}<div class="mu">${l.cantidad} × ${cop(l.precio)}</div></span>${cop(l.cantidad*l.precio)}</div>`).join('')}
     <div class="line"><span class="sp">Subtotal</span>${cop(e.subtotal)}</div><div class="line"><span class="sp">IVA incluido</span>${cop(e.impuestos)}</div>
     <div class="line"><span class="sp"><b>Total</b></span><b>${cop(e.total)}</b></div>
-    <div class="line"><span class="sp">Pagado con</span>${esc(e.metodo_pago)} · ${esc(e.ref_externa||'')}</div>
+    <div class="line"><span class="sp">${fiado?'Forma de pago':'Pagado con'}</span>${fiado?'Fiado a tu cuenta':esc(e.metodo_pago)+' · '+esc(e.ref_externa||'')}</div>
+    ${fiado&&e.saldo_fiado!=null?`<div class="line"><span class="sp">Tu saldo en la tienda</span><b>${cop(e.saldo_fiado)}</b></div>${e.cupo_fiado!=null?`<div class="mu">Cupo total: ${cop(e.cupo_fiado)}</div>`:''}`:''}
     <p class="mu">Comprobante de venta. No es factura electrónica de la DIAN.</p>
     <button class="big" id="wa">Enviar por WhatsApp</button><button class="g big" id="nv" style="margin-top:8px">Nueva compra</button></div>`;
   $('#wa').onclick=()=>window.open(wa,'_blank','noopener');$('#nv').onclick=()=>{pago=null;vCarrito()};
