@@ -435,15 +435,17 @@ async function vInv(){
   $('#body').innerHTML='<div class="card">Cargando inventario…</div>';
   const ok=await loadInv();if(!ok||tab!=='inv')return;
   $('#body').innerHTML=`<div class="card"><div class="row">
-    <input id="iq" class="sp" style="min-width:160px;margin:0" placeholder="Buscar producto o código" value="${esc(invQ)}">
+    <input id="iq" class="sp" style="min-width:160px;margin:0" placeholder="Buscar producto o código" value="${esc(invQ)}"><button class="g s" id="iqc" aria-label="Buscar escaneando" title="Buscar escaneando">📷</button>
     <select id="is" style="width:auto;margin:0"><option value="">Todas las sedes</option>${sucs.map(s=>`<option value="${s.id_sucursal}" ${String(s.id_sucursal)===invSuc?'selected':''}>${esc(s.nombre_sucursal)}</option>`).join('')}</select>
     <label style="margin:0"><input type="checkbox" id="ia" ${invSolo?'checked':''}>Solo alertas</label>
-    <button id="np" class="s">+ Producto</button></div></div>
+    <button id="np" class="s">+ Producto</button><button id="rm" class="s">📷 Recibir mercancía</button></div></div>
     <div class="card t" id="it"></div>`;
   $('#iq').oninput=()=>{invQ=$('#iq').value;invList()};
   $('#is').onchange=()=>{invSuc=$('#is').value;invList()};
   $('#ia').onchange=()=>{invSolo=$('#ia').checked;invList()};
-  $('#np').onclick=nuevoProducto;
+  $('#np').onclick=()=>nuevoProducto();
+  $('#rm').onclick=recibirMercancia;
+  $('#iqc').onclick=()=>escanearEn('#iq',cod=>{invQ=cod;invList()});
   invList();
 }
 function invList(){
@@ -484,18 +486,20 @@ function editarInv(r){
     const x=await call('ajustar_stock',{p_id_sucursal:r.id_sucursal,p_id_producto:r.id_producto,p_delta:s-r.stock,p_stock_minimo:mi});
     if(x.data){m.remove();toast('Inventario actualizado');await tras(x)}};
 }
-function nuevoProducto(){
+function nuevoProducto(cod0){
   const m=modal(`<h2>Producto nuevo</h2>
     <label>Nombre<input id="pn" placeholder="Ej: Jamón de cerdo x 250g"></label>
     <div class="row"><label class="sp">Precio (IVA incluido)<input id="pp" type="number" inputmode="decimal" min="0"></label>
       <label class="sp">IVA<select id="pi"><option value="19">19 %</option><option value="5">5 %</option><option value="0">0 %</option></select></label></div>
-    <label>Código de barras (opcional)<input id="pb"></label>
+    <label>Código de barras (opcional)<div class="row" style="flex-wrap:nowrap"><input id="pb" class="sp" style="margin:4px 0 8px;min-width:0" value="${esc(cod0||'')}"><button type="button" class="g s" id="pbc" aria-label="Escanear código" style="margin:4px 0 8px">📷</button></div><div class="mu" id="pbw"></div></label>
     <label>Categoría<select id="pc"><option value="">Sin categoría</option>${cats.map(c=>`<option value="${c.id_categoria}">${esc(c.nombre)}</option>`).join('')}</select></label>
     <label>Sede con stock inicial<select id="ps">${sucs.map(s=>`<option value="${s.id_sucursal}">${esc(s.nombre_sucursal)}</option>`).join('')}</select></label>
     <div class="row"><label class="sp">Stock inicial<input id="pq" type="number" inputmode="numeric" min="0" value="0"></label>
       <label class="sp">Stock mínimo<input id="pm" type="number" inputmode="numeric" min="0" value="5"></label></div>
     <div class="row"><button class="g sp" id="mc">Cancelar</button><button class="sp" id="mo">Crear</button></div>`);
   $('#mc').onclick=()=>m.remove();
+  const aviso=()=>{const c=$('#pb').value.trim(),r=c&&invData.find(x=>x.codigo_barras===c);$('#pbw').innerHTML=r?`<span class="wa">Ya existe: ${esc(r.producto)}. Usa "Recibir mercancía" para sumarle stock.</span>`:''};
+  $('#pb').oninput=aviso;$('#pbc').onclick=()=>escanearEn('#pb');aviso();
   $('#mo').onclick=async()=>{
     const x=await call('crear_producto',{p_nombre:$('#pn').value,p_precio:Number($('#pp').value),p_iva:Number($('#pi').value),p_codigo_barras:$('#pb').value||null,
       p_id_categoria:$('#pc').value?Number($('#pc').value):null,p_id_sucursal:Number($('#ps').value),p_stock:parseInt($('#pq').value,10)||0,p_stock_minimo:parseInt($('#pm').value,10)||0});
@@ -545,28 +549,25 @@ const ZXING_URL='https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.mi
 let zxingP=null;
 const cargarZXing=()=>window.ZXing?Promise.resolve():(zxingP||(zxingP=new Promise((ok,no)=>{const s=document.createElement('script');s.src=ZXING_URL;s.onload=ok;s.onerror=()=>{zxingP=null;no(new Error('No se pudo cargar el lector (¿sin internet?)'))};document.head.appendChild(s)})));
 function pitido(){try{const A=window.AudioContext||window.webkitAudioContext,c=new A(),o=c.createOscillator(),g=c.createGain();o.frequency.value=880;g.gain.value=.08;o.connect(g);g.connect(c.destination);o.start();setTimeout(()=>{o.stop();c.close()},110)}catch(e){}try{navigator.vibrate&&navigator.vibrate(60)}catch(e){}}
-async function escanear(){
-  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){toast('Este navegador no permite usar la cámara. Escribe el código en la búsqueda.',true);return}
-  const m=modal(`<h2>Escanear código de barras</h2><p class="mu" id="sm">Apunta la cámara al código del producto. Puedes escanear varios seguidos.</p>
-    <video id="sv" playsinline muted autoplay style="width:100%;max-height:50vh;border-radius:10px;background:#000;object-fit:cover"></video>
-    <div class="line" style="margin-top:8px"><span class="sp mu" id="sc">Carrito: <b id="sn">${[...cart.values()].reduce((a,x)=>a+x.qty,0)}</b> unidades</span></div>
-    <button id="sx" style="width:100%">Listo</button>`);
+/* Abre un modal con la cámara. alLeer(codigo, cerrar) se llama una vez por lectura (el mismo código frente a la cámara no se repite).
+   opts: titulo, ayuda, extra (HTML bajo el video), botones (HTML; por defecto "Listo"), alCerrar. Devuelve {m,cerrar} o null. */
+async function camara(o){
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){toast('Este navegador no permite usar la cámara. Escribe el código a mano.',true);return null}
+  const m=modal(`<h2>${o.titulo||'Escanear código de barras'}</h2><p class="mu">${o.ayuda||'Apunta la cámara al código del producto.'}</p>
+    <video id="sv" playsinline muted autoplay style="width:100%;max-height:${o.extra?'32vh':'50vh'};border-radius:10px;background:#000;object-fit:cover"></video>
+    ${o.extra||''}${o.botones||'<button id="sx" style="width:100%;margin-top:8px">Listo</button>'}`);
   const v=m.querySelector('#sv');let stop=false,stream=null,reader=null,ultimo='',tUlt=0;
-  const cerrar=()=>{stop=true;try{reader&&reader.reset()}catch(e){}try{stream&&stream.getTracks().forEach(t=>t.stop())}catch(e){}m.remove()};
-  m.querySelector('#sx').onclick=cerrar;
-  m.addEventListener('mousedown',e=>{if(e.target===m)cerrar()});
+  const cerrar=()=>{if(stop)return;stop=true;try{reader&&reader.reset()}catch(e){}try{stream&&stream.getTracks().forEach(t=>t.stop())}catch(e){}m.remove();o.alCerrar&&o.alCerrar()};
+  const sx=m.querySelector('#sx');if(sx)sx.onclick=cerrar;
+  m.addEventListener('mousedown',e=>{if(e.target===m&&!o.noFuera)cerrar()});
   const alLeer=cod=>{
-    cod=String(cod||'').trim();if(!cod)return;
+    cod=String(cod||'').trim();if(!cod||stop)return;
     const t=Date.now();if(cod===ultimo&&t-tUlt<1200){tUlt=t;return} // mismo código aún frente a la cámara: no repetir
     ultimo=cod;tUlt=t;
-    const p=prods.find(x=>x.codigo_barras===cod);
-    if(!p){toast('Código '+cod+' no registrado',true);return}
-    if(p.stock<=0){toast(p.nombre+': agotado',true);return}
-    add(p);pitido();toast('✓ '+p.nombre);
-    const n=m.querySelector('#sn');if(n)n.textContent=[...cart.values()].reduce((a,x)=>a+x.qty,0);
+    if(o.alLeer(cod,cerrar)===true)cerrar();
   };
   const fallo=e=>{cerrar();toast(e&&e.name==='NotAllowedError'?'Permiso de cámara denegado. Actívalo en el navegador o escribe el código.':(e&&e.message)||'No se pudo abrir la cámara',true)};
-  try{
+  (async()=>{try{
     if('BarcodeDetector' in window){
       const det=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e','code_128','code_39']});
       stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
@@ -577,9 +578,51 @@ async function escanear(){
       await cargarZXing();if(stop)return;
       const Z=window.ZXing,h=new Map();h.set(Z.DecodeHintType.POSSIBLE_FORMATS,[Z.BarcodeFormat.EAN_13,Z.BarcodeFormat.EAN_8,Z.BarcodeFormat.UPC_A,Z.BarcodeFormat.UPC_E,Z.BarcodeFormat.CODE_128,Z.BarcodeFormat.CODE_39]);
       reader=new Z.BrowserMultiFormatReader(h,150);
-      await reader.decodeFromConstraints({video:{facingMode:{ideal:'environment'}},audio:false},v,(r)=>{if(r&&!stop)alLeer(r.getText())});
+      await reader.decodeFromConstraints({video:{facingMode:{ideal:'environment'}},audio:false},v,r=>{if(r)alLeer(r.getText())});
     }
-  }catch(e){fallo(e)}
+  }catch(e){fallo(e)}})();
+  return {m,cerrar};
+}
+/* Vender: cada lectura suma 1 unidad al carrito */
+function escanear(){
+  const unid=()=>[...cart.values()].reduce((a,x)=>a+x.qty,0);
+  camara({titulo:'Escanear código de barras',ayuda:'Apunta la cámara al código del producto. Puedes escanear varios seguidos.',
+    extra:`<div class="line" style="margin-top:8px"><span class="sp mu">Carrito: <b id="sn">${unid()}</b> unidades</span></div>`,
+    alLeer:cod=>{
+      const p=prods.find(x=>x.codigo_barras===cod);
+      if(!p){toast('Código '+cod+' no registrado',true);return}
+      if(p.stock<=0){toast(p.nombre+': agotado',true);return}
+      add(p);pitido();toast('✓ '+p.nombre);const n=document.getElementById('sn');if(n)n.textContent=unid();
+    }});
+}
+/* Inventario: recibir mercancía (cada lectura suma 1 unidad al lote; se registra todo junto) */
+function recibirMercancia(){
+  const lote=new Map(),nom=id=>(invData.find(r=>r.id_producto===id)||{}).producto||('Producto '+id);
+  let sede=invSuc||String(perfil.id_sucursal);
+  const pintar=()=>{const el=document.getElementById('rl');if(!el)return;
+    el.innerHTML=lote.size?[...lote].map(([id,n])=>`<div class="line"><span class="sp">${esc(nom(id))}</span><input type="number" min="0" inputmode="numeric" value="${n}" data-r="${id}" style="width:74px;margin:0"></div>`).join(''):'<span class="mu">Aún no has escaneado productos.</span>';
+    el.querySelectorAll('[data-r]').forEach(i=>i.oninput=()=>{lote.set(Number(i.dataset.r),Math.max(0,Math.floor(Number(i.value)||0)))})};
+  camara({titulo:'Recibir mercancía',ayuda:'Escanea cada producto que llega: suma 1 unidad por lectura. Puedes corregir las cantidades abajo.',noFuera:true,
+    extra:`<select id="rsd" style="margin-top:8px">${sucs.map(x=>`<option value="${x.id_sucursal}" ${String(x.id_sucursal)===sede?'selected':''}>Entra a: ${esc(x.nombre_sucursal)}</option>`).join('')}</select><div id="rl" style="max-height:24vh;overflow:auto"></div>`,
+    botones:'<div class="row" style="margin-top:8px"><button class="g sp" id="rc">Cancelar</button><button class="sp" id="rg">Registrar entrada</button></div>',
+    alLeer:cod=>{
+      const r=invData.find(x=>x.codigo_barras===cod);
+      if(!r){toast('Código '+cod+' no registrado. Créalo con + Producto',true);return}
+      lote.set(r.id_producto,(lote.get(r.id_producto)||0)+1);pitido();toast('✓ '+r.producto);pintar()}
+  }).then(c=>{if(!c)return;const {m,cerrar}=c;pintar();
+    m.querySelector('#rsd').onchange=e=>{sede=e.target.value};
+    m.querySelector('#rc').onclick=cerrar;
+    m.querySelector('#rg').onclick=async()=>{
+      const items=[...lote].filter(([,n])=>n>0);if(!items.length){toast('Escanea al menos un producto',true);return}
+      let ok=0,mal=0;for(const [id,n] of items){const x=await call('ajustar_stock',{p_id_sucursal:Number(sede),p_id_producto:id,p_delta:n});x.data?ok++:mal++}
+      if(ok){cerrar();toast(`Entrada registrada: ${pl(ok,'producto')}${mal?` (${mal} con error)`:''}`);await tras({data:1})}};
+  });
+}
+/* Escanea un código y lo deja en un campo de texto */
+function escanearEn(sel,alTerminar){
+  camara({titulo:'Escanear código',ayuda:'Apunta la cámara al código de barras.',alLeer:(cod,cerrar)=>{
+    const el=document.querySelector(sel);if(el){el.value=cod;el.dispatchEvent(new Event('input',{bubbles:true}))}
+    pitido();toast('Código leído: '+cod);alTerminar&&alTerminar(cod);return true}});
 }
 
 /* ---------- App instalable (PWA) ---------- */
