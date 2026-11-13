@@ -2,7 +2,7 @@
    - Guarda la "cáscara" de la app para que abra sin internet.
    - NUNCA guarda llamadas a Supabase (datos, ventas, sesión): esas siempre van a la red.
    - Páginas: primero la red (para recibir actualizaciones) y, si falla, la copia guardada. */
-const V = 'surtify-v11';
+const V = 'surtify-v12';
 const SHELL = ['./', 'index.html', 'config.js', 'manifest.webmanifest', 'assets/logo.png', 'assets/favicon.png',
   'assets/icon-192.png', 'assets/icon-512.png', 'assets/apple-touch-icon.png',
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js',

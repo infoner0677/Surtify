@@ -81,8 +81,10 @@ async function init(){
   const c=window.SURTIFY||{};
   if(!c.SUPABASE_URL||c.SUPABASE_URL.includes('TU-PROYECTO')){
     app.innerHTML='<div class="card"><h2>Falta configurar Supabase</h2><p>Edita <b>config.js</b> y pega la URL y la clave anon de tu proyecto.</p></div>';return}
+  const hashTipo=(location.hash.match(/type=(invite|recovery)/)||[])[1]||null; // enlace de invitación o de "olvidé mi contraseña"
   db=supabase.createClient(c.SUPABASE_URL,c.SUPABASE_ANON_KEY);
   const {data:{session}}=await db.auth.getSession();
+  if(session&&(hashTipo||(session.user.user_metadata||{}).debe_cambiar_clave)){nuevaClave(hashTipo?(hashTipo==='invite'?'Bienvenido a Surtify':'Crea tu nueva contraseña'):'Cambia tu contraseña temporal');return}
   if(session){boot()}else{login()}
 }
 
@@ -91,17 +93,23 @@ function login(){
   <label>Correo<input id="em" type="email" autocomplete="username"></label>
   <label>Contraseña<input id="pw" type="password" autocomplete="current-password"></label>
   <button id="go" style="width:100%">Entrar</button><button class="g s" id="ins" hidden style="width:100%;margin-top:8px">Instalar app en este dispositivo</button>
+  <p class="mu" style="text-align:center;margin:12px 0 0"><a href="#" id="olv">¿Olvidaste tu contraseña?</a></p>
   <p class="mu" style="text-align:center;margin:12px 0 0">¿Vas a cargar tu lista de productos? <a href="assets/plantilla_productos_surtify.xlsx" download>Descarga la plantilla de Excel</a> (trae las instrucciones).</p></div></div>`;
   const go=async()=>{
     const {error}=await db.auth.signInWithPassword({email:$('#em').value.trim(),password:$('#pw').value});
     if(error){toast('Correo o contraseña incorrectos',true)}else{boot()}};
   $('#go').onclick=go;btnInstalar();
+  $('#olv').onclick=async e=>{e.preventDefault();const em=$('#em').value.trim();
+    if(!em){toast('Escribe tu correo arriba y vuelve a tocar aquí',true);return}
+    const {error}=await db.auth.resetPasswordForEmail(em,{redirectTo:location.origin+location.pathname});
+    if(error){toast('No se pudo enviar el correo ahora. Pídele a tu administrador que te restablezca la contraseña.',true);return}
+    toast('Si ese correo está registrado, te enviamos un enlace. Si no llega, pídele a tu administrador que te restablezca la contraseña.')};
   $('#pw').addEventListener('keydown',e=>{if(e.key==='Enter')go()});
 }
 
 async function boot(){
   const p=await call('perfil_actual');
-  if(!p.data){app.innerHTML='<div class="card"><h2>Usuario sin empleado</h2><p>Tu cuenta no está vinculada a un empleado activo.</p><button class="g" id="lo">Salir</button></div>';$('#lo').onclick=logout;return}
+  if(!p.data){app.innerHTML='<div class="card"><h2>Acceso no disponible</h2><p>Tu cuenta no está activa o no está vinculada a una persona del equipo. Habla con el administrador de la tienda.</p><button class="g" id="lo">Salir</button></div>';$('#lo').onclick=logout;return}
   perfil=p.data;adm=!!perfil.es_administrador;tab=adm?'panel':'vender';await refresh();
 }
 async function logout(){await db.auth.signOut();cart.clear();devSel=null;repR=null;cartera=[];carteraOk=false;metodoSel='Efectivo';cliSel='';facPer='hoy';facSuc='';facQ='';facMet='';facSin=false;autoSub='verificar';autoCnt=0;sugUrg=0;caja=null;perfil=null;login()}
@@ -131,7 +139,7 @@ function bindOpen(){
 function render(){
   const h=head();
   if(!adm&&!caja){app.innerHTML=h+openCard();$('#lo').onclick=logout;btnInstalar();bindOpen();return}
-  const tabs=adm?[['panel','Panel'],['inv','Inventario'+(invAlertas?` <span class="badge">${invAlertas}</span>`:'')],['compras','Compras'+(sugUrg?` <span class="badge">${sugUrg}</span>`:'')],['vender','Vender'],['facturas','Facturas'],['fiados','Fiados'],['auto','Autoservicio'+(autoCnt?` <span class="badge">${autoCnt}</span>`:'')],['devolver','Devolver'],['gasto','Gasto'],['reporte','Reporte'],['cerrar','Cerrar caja']]
+  const tabs=adm?[['panel','Panel'],['inv','Inventario'+(invAlertas?` <span class="badge">${invAlertas}</span>`:'')],['compras','Compras'+(sugUrg?` <span class="badge">${sugUrg}</span>`:'')],['vender','Vender'],['facturas','Facturas'],['fiados','Fiados'],['auto','Autoservicio'+(autoCnt?` <span class="badge">${autoCnt}</span>`:'')],['equipo','Equipo'],['devolver','Devolver'],['gasto','Gasto'],['reporte','Reporte'],['cerrar','Cerrar caja']]
                 :[['vender','Vender'],['facturas','Mis ventas'],['fiados','Fiados'],['devolver','Devolver'],['gasto','Gasto'],['reporte','Reporte'],['cerrar','Cerrar caja']];
   const deCaja=['vender','devolver','gasto','cerrar'].includes(tab);
   app.innerHTML=h+(caja&&deCaja?`<div class="stats">
@@ -142,7 +150,7 @@ function render(){
   $('#lo').onclick=logout;btnInstalar();
   app.querySelectorAll('[data-t]').forEach(b=>{b.onclick=()=>{tab=b.dataset.t;render()}});
   if(deCaja&&!caja){$('#body').innerHTML=openCard();bindOpen();return}
-  ({panel:vPanel,inv:vInv,compras:vCompras,vender:vVender,facturas:vFacturas,fiados:vFiados,auto:vAuto,devolver:vDevolver,gasto:vGasto,reporte:vReporte,cerrar:vCerrar})[tab]();
+  ({panel:vPanel,inv:vInv,compras:vCompras,vender:vVender,facturas:vFacturas,fiados:vFiados,auto:vAuto,equipo:vEquipo,devolver:vDevolver,gasto:vGasto,reporte:vReporte,cerrar:vCerrar})[tab]();
 }
 
 /* ---------- Vender ---------- */
@@ -359,6 +367,125 @@ async function verCliente(id){
   }
 }
 
+
+/* ---------- Nueva contraseña (invitación, recuperación o contraseña temporal) ---------- */
+function nuevaClave(titulo){
+  app.innerHTML=`<div class="login"><div class="card"><img class="logo-l" src="assets/logo.png" alt="Surtify"><h2 style="text-align:center">${esc(titulo)}</h2>
+    <p class="mu" style="text-align:center">Escribe la contraseña que vas a usar de ahora en adelante (mínimo 8 caracteres).</p>
+    <label>Nueva contraseña<input id="n1" type="password" autocomplete="new-password"></label>
+    <label>Repítela<input id="n2" type="password" autocomplete="new-password"></label>
+    <button id="ng" style="width:100%">Guardar y entrar</button><button class="g s" id="nx" style="width:100%;margin-top:8px">Salir</button></div></div>`;
+  $('#nx').onclick=()=>logout();
+  const ir=async()=>{const a=$('#n1').value,b=$('#n2').value;
+    if(a.length<8){toast('La contraseña debe tener al menos 8 caracteres',true);return}
+    if(a!==b){toast('Las dos contraseñas no coinciden',true);return}
+    const {error}=await db.auth.updateUser({password:a,data:{debe_cambiar_clave:false}});
+    if(error){toast(error.message.includes('different')?'Escoge una contraseña distinta a la anterior':error.message,true);return}
+    try{history.replaceState(null,'',location.pathname+location.search)}catch(e){}
+    toast('Contraseña guardada');boot()};
+  $('#ng').onclick=ir;$('#n2').addEventListener('keydown',e=>{if(e.key==='Enter')ir()});
+}
+
+/* ---------- Equipo (dueño): agregar personas, dar y quitar accesos ---------- */
+let eqData=null;
+const claveTemp=()=>{const A='abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789',b=new Uint8Array(10);crypto.getRandomValues(b);return [...b].map(x=>A[x%A.length]).join('')};
+async function eqInvocar(body){
+  const {data,error}=await db.functions.invoke('equipo-acceso',{body});
+  if(error||!data||data.error){let m=(data&&data.error)||(error&&error.message)||'No se pudo contactar el servidor';
+    try{if(error&&error.context&&error.context.json){const j=await error.context.json();if(j&&j.error)m=j.error}}catch(e){}
+    toast(m,true);return null}
+  return data;
+}
+const EQ_TXT={agregado:(a,p)=>`agregó a ${p}`,desactivado:(a,p)=>`desactivó a ${p}`,reactivado:(a,p)=>`reactivó a ${p}`,rol:(a,p,d)=>`cambió el rol de ${p} a ${d}`,
+  sede:(a,p,d)=>`movió a ${p} a ${d}`,acceso_creado:(a,p)=>`entregó acceso a ${p}`,invitacion:(a,p)=>`envió invitación a ${p}`,clave_restablecida:(a,p)=>`restableció la contraseña de ${p}`};
+async function vEquipo(){
+  $('#body').innerHTML='<div class="card"><span class="mu">Cargando…</span></div>';
+  const r=await call('equipo_listar');if(!r.data)return;eqData=r.data;
+  const E=eqData,est=x=>!x.activo?'<b class="er">Desactivado</b>':!x.tiene_acceso?'<b class="wa">Invitación pendiente</b>':'<b class="ok">Activo</b>';
+  $('#body').innerHTML=`<div class="card"><div class="row"><h2 class="sp" style="margin:0">Equipo</h2><button class="s" id="eqn">+ Agregar persona</button></div>
+    <p class="mu">Aquí das y quitas accesos sin tocar la base de datos. Administrador: ve y hace todo. Cajero: vende y maneja la caja de su sede.</p></div>
+    <div class="card">${E.personas.map(x=>`<div style="padding:10px 0;border-bottom:1px solid var(--bd)"><div><b>${esc(x.nombre)}</b>${x.id_empleado===E.yo?' <span class="mu">(tú)</span>':''} · ${est(x)}</div>
+      <div class="mu">${esc(x.email)} · ${esc(x.rol||'Sin rol')} · ${esc(x.sucursal)}</div>
+      <div class="row" style="margin-top:6px"><button class="g s" data-eed="${x.id_empleado}">Editar rol/sede</button>
+        ${x.activo?`<button class="g s" data-ere="${x.id_empleado}">${x.tiene_acceso?'Restablecer contraseña':'Reenviar acceso'}</button>`:''}
+        ${x.id_empleado!==E.yo?(x.activo?`<button class="g s" data-eof="${x.id_empleado}">Desactivar</button>`:`<button class="s" data-eon="${x.id_empleado}">Reactivar</button>`):''}</div></div>`).join('')}</div>
+    <div class="card"><h2>Movimientos recientes</h2>${E.eventos.length?E.eventos.map(v=>`<div class="line"><span class="sp"><span class="mu">${hora(v.creado)}</span> · ${esc(v.actor||'—')} ${esc((EQ_TXT[v.accion]||(()=>v.accion))(v.actor,v.persona||'—',v.detalle))}</span></div>`).join(''):'<span class="mu">Aún no hay movimientos.</span>'}</div>`;
+  const P=id=>E.personas.find(x=>x.id_empleado===Number(id));
+  $('#eqn').onclick=()=>eqAgregar();
+  $('#body').querySelectorAll('[data-eed]').forEach(b=>b.onclick=()=>eqEditar(P(b.dataset.eed)));
+  $('#body').querySelectorAll('[data-ere]').forEach(b=>b.onclick=()=>eqRestablecer(P(b.dataset.ere)));
+  $('#body').querySelectorAll('[data-eof]').forEach(b=>b.onclick=()=>eqDesactivar(P(b.dataset.eof)));
+  $('#body').querySelectorAll('[data-eon]').forEach(b=>b.onclick=async()=>{const d=await eqInvocar({accion:'estado',id_empleado:Number(b.dataset.eon),activo:true});if(d){toast(d.aviso||'Persona reactivada',!!d.aviso);vEquipo()}});
+}
+/* Selector del modo de entrega del acceso (lo decide el dueño): contraseña temporal o correo de invitación */
+function eqModoHtml(){return `<div class="mu" style="margin-top:8px">¿Cómo recibe el acceso?</div>
+  <label style="display:flex;gap:8px;align-items:flex-start;margin:6px 0"><input type="radio" name="emo" value="password" checked style="margin-top:4px"><span><b>Contraseña temporal</b><div class="mu">Tú se la entregas (en persona o por WhatsApp). Al entrar, la persona la cambia por la suya. No necesita revisar el correo.</div></span></label>
+  <div id="emp" class="row" style="flex-wrap:nowrap;margin:0 0 6px 24px"><input id="epw" class="sp" style="margin:0;min-width:0;font-family:monospace" value="${claveTemp()}"><button type="button" class="g s" id="egen">🔄</button></div>
+  <label style="display:flex;gap:8px;align-items:flex-start;margin:6px 0"><input type="radio" name="emo" value="correo" style="margin-top:4px"><span><b>Correo de invitación</b><div class="mu">La persona recibe un correo con un enlace para crear su propia contraseña.</div></span></label>`}
+function eqModoEvents(m){const v=()=>m.querySelector('input[name=emo]:checked').value;
+  m.querySelectorAll('input[name=emo]').forEach(r=>r.onchange=()=>{m.querySelector('#emp').hidden=v()!=='password'});
+  m.querySelector('#egen').onclick=()=>{m.querySelector('#epw').value=claveTemp()};return v}
+function eqEntrega(nombre,email,d,pw){
+  const url=location.origin+location.pathname;let h;
+  if(d.resultado==='creado'){const msg=`Hola ${nombre}, ya tienes acceso a Surtify.\nEntra aquí: ${url}\nUsuario: ${email}\nContraseña temporal: ${pw}\nAl entrar te pedirá crear tu propia contraseña.`;
+    h=`<h2 class="ok">Acceso listo</h2><p>Entrégale estos datos a <b>${esc(nombre)}</b>. <b>La contraseña no se vuelve a mostrar.</b></p>
+      <div class="line"><span class="sp">Enlace</span><span style="word-break:break-all">${esc(url)}</span></div><div class="line"><span class="sp">Usuario</span><b>${esc(email)}</b></div>
+      <div class="line"><span class="sp">Contraseña temporal</span><b style="font-family:monospace;font-size:1.1rem">${esc(pw)}</b></div>
+      <button style="width:100%;margin-top:8px" id="ew">Enviar por WhatsApp</button><button class="g" style="width:100%;margin-top:6px" id="ec">Copiar los datos</button>`;
+    const m=modal(h+`<button class="g" style="width:100%;margin-top:6px" id="ex">Listo</button>`);
+    m.querySelector('#ew').onclick=()=>window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank','noopener');
+    m.querySelector('#ec').onclick=async()=>{try{await navigator.clipboard.writeText(msg);toast('Datos copiados')}catch(e){toast('No se pudo copiar',true)}};
+    m.querySelector('#ex').onclick=()=>m.remove();return}
+  const txt=d.resultado==='invitado'?`Enviamos una invitación a ${email}. Le llegará un correo con el enlace para crear su contraseña (revisa también spam).`
+    :d.resultado==='existente'?`Ese correo ya tenía cuenta en Surtify, así que quedó vinculada. Entra con su contraseña actual o con «¿Olvidaste tu contraseña?». No se le cambió la contraseña.`
+    :d.resultado==='clave_cambiada'?`Listo. Ahora entrega la nueva contraseña temporal a ${nombre}.`:d.resultado==='correo_enviado'?`Enviamos a ${email} un correo para crear una contraseña nueva.`:'Listo.';
+  const m=modal(`<h2 class="ok">Listo</h2><p>${esc(txt)}</p><button style="width:100%" id="ex">Cerrar</button>`);m.querySelector('#ex').onclick=()=>m.remove();
+}
+function eqAgregar(){
+  const E=eqData,cajero=(E.roles.find(r=>!r.es_administrador)||E.roles[0]||{}).id_role;
+  const m=modal(`<h2>Agregar persona</h2>
+    <label>Nombre<input id="enm" autocomplete="off"></label><label>Correo<input id="eem" type="email" autocapitalize="off" autocomplete="off" placeholder="nombre@correo.com"></label>
+    <label>Sede<select id="esd">${E.sucursales.map(s=>`<option value="${s.id_sucursal}">${esc(s.nombre)}</option>`).join('')}</select></label>
+    <label>Rol<select id="erl">${E.roles.map(r=>`<option value="${r.id_role}" ${r.id_role===cajero?'selected':''}>${esc(r.nombre_rol)}${r.es_administrador?' (todo el acceso)':''}</option>`).join('')}</select></label>
+    ${eqModoHtml()}<div class="row" style="margin-top:10px"><button class="g sp" id="ec">Cancelar</button><button class="sp" id="eg">Crear acceso</button></div>`);
+  const modo=eqModoEvents(m);m.querySelector('#ec').onclick=()=>m.remove();
+  m.querySelector('#eg').onclick=async e=>{if(busy)return;const nombre=m.querySelector('#enm').value.trim(),email=m.querySelector('#eem').value.trim(),pw=m.querySelector('#epw').value,md=modo();
+    if(nombre.length<2){toast('Escribe el nombre',true);return}if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){toast('Escribe un correo válido',true);return}
+    if(md==='password'&&pw.length<8){toast('La contraseña debe tener al menos 8 caracteres',true);return}
+    busy=true;e.target.disabled=true;e.target.textContent='Creando…';
+    const d=await eqInvocar({accion:'crear',nombre,email,id_sucursal:Number(m.querySelector('#esd').value),id_role:Number(m.querySelector('#erl').value),modo:md,password:md==='password'?pw:undefined});
+    busy=false;if(!d){e.target.disabled=false;e.target.textContent='Crear acceso';return}
+    m.remove();eqEntrega(nombre,email.toLowerCase(),d,pw);vEquipo()};
+}
+function eqRestablecer(x){
+  const m=modal(`<h2>${x.tiene_acceso?'Restablecer contraseña':'Reenviar acceso'}</h2><div class="mu">${esc(x.nombre)} · ${esc(x.email)}</div>${eqModoHtml()}
+    <div class="row" style="margin-top:10px"><button class="g sp" id="ec">Cancelar</button><button class="sp" id="eg">Continuar</button></div>`);
+  const modo=eqModoEvents(m);m.querySelector('#ec').onclick=()=>m.remove();
+  m.querySelector('#eg').onclick=async e=>{if(busy)return;const md=modo(),pw=m.querySelector('#epw').value;
+    if(md==='password'&&pw.length<8){toast('La contraseña debe tener al menos 8 caracteres',true);return}
+    busy=true;e.target.disabled=true;const d=await eqInvocar({accion:'restablecer',id_empleado:x.id_empleado,modo:md,password:md==='password'?pw:undefined});busy=false;
+    if(!d){e.target.disabled=false;return}
+    m.remove();if(d.resultado==='clave_cambiada'||d.resultado==='creado')eqEntrega(x.nombre,x.email,{resultado:'creado'},pw);else eqEntrega(x.nombre,x.email,d,pw);vEquipo()};
+}
+function eqEditar(x){
+  const E=eqData,m=modal(`<h2>Editar a ${esc(x.nombre)}</h2>
+    <label>Rol<select id="erl">${E.roles.map(r=>`<option value="${r.id_role}" ${r.id_role===x.id_role?'selected':''}>${esc(r.nombre_rol)}</option>`).join('')}</select></label>
+    <label>Sede<select id="esd">${E.sucursales.map(s=>`<option value="${s.id_sucursal}" ${s.id_sucursal===x.id_sucursal?'selected':''}>${esc(s.nombre)}</option>`).join('')}</select></label>
+    <p class="mu">Los cambios se aplican la próxima vez que la persona abra o recargue la app.</p>
+    <div class="row"><button class="g sp" id="ec">Cancelar</button><button class="sp" id="eg">Guardar</button></div>`);
+  m.querySelector('#ec').onclick=()=>m.remove();
+  m.querySelector('#eg').onclick=async()=>{const rl=Number(m.querySelector('#erl').value),sd=Number(m.querySelector('#esd').value);
+    if(rl===x.id_role&&sd===x.id_sucursal){m.remove();return}
+    const r=await call('equipo_actualizar',{p_id_empleado:x.id_empleado,p_id_role:rl!==x.id_role?rl:null,p_id_sucursal:sd!==x.id_sucursal?sd:null});
+    if(r.data){m.remove();toast('Cambios guardados');vEquipo()}};
+}
+function eqDesactivar(x){
+  const m=modal(`<h2>¿Desactivar a ${esc(x.nombre)}?</h2><p>Perderá el acceso de inmediato. Su historial de ventas se conserva y puedes reactivarla cuando quieras.</p>
+    <div class="row"><button class="g sp" id="ec">Cancelar</button><button class="sp" id="eg" style="background:var(--er);color:#fff">Desactivar</button></div>`);
+  m.querySelector('#ec').onclick=()=>m.remove();
+  m.querySelector('#eg').onclick=async e=>{if(busy)return;busy=true;e.target.disabled=true;const d=await eqInvocar({accion:'estado',id_empleado:x.id_empleado,activo:false});busy=false;
+    if(!d){e.target.disabled=false;return}m.remove();toast(d.aviso||'Persona desactivada',!!d.aviso);vEquipo()};
+}
 
 /* ---------- Autoservicio (dueño): conciliar comprobantes Bre-B, aprobar clientes de fiado y configurar el cobro ---------- */
 async function vAuto(){

@@ -131,3 +131,11 @@ for f in tests/00_shim_supabase_local.sql 01_esquema.sql 02_funciones_y_triggers
 - Validaciones: nombre y precio obligatorios, IVA 0–100, stock no negativo, códigos o nombres repetidos dentro del archivo.
 - En la app: Inventario → **⬆ Importar Excel** (descarga plantilla, resumen previo, confirmar). El archivo se lee en el navegador (SheetJS) y acepta precios como `$ 3.200`, IVA como `19%` y avisa si Excel convirtió los códigos de barras a notación científica.
 
+## 16 · Equipo: accesos desde la app
+- Funciones solo para administrador y siempre dentro de su comercio: `equipo_listar`, `equipo_persona`, `equipo_crear`, `equipo_actualizar` (rol, sede, activo), `equipo_descartar`, `equipo_registrar`. Reglas: nadie puede desactivarse ni quitarse el rol de administrador a sí mismo, debe quedar al menos un administrador activo, no se asignan roles o sedes de otro comercio ni la sede de autoservicio, y un correo no puede repetirse.
+- Tabla `equipo_eventos`: quién agregó, desactivó, cambió rol/sede o entregó/restableció un acceso (sin contraseñas). Solo la ve el administrador.
+- Edge Function `supabase/functions/equipo-acceso` (clave de servicio solo en el servidor). Acciones: `crear`, `restablecer`, `estado`. Dos formas de dar acceso, a elección del dueño: **contraseña temporal** (el usuario queda confirmado y debe cambiarla al entrar) o **correo de invitación**. Desactivar bloquea el inicio de sesión (ban) y la base de datos le quita el acceso a los datos al instante.
+- App: pestaña **Equipo**; pantalla de nueva contraseña (invitación, recuperación o contraseña temporal) y enlace «¿Olvidaste tu contraseña?» en el login.
+- **Correo:** el correo integrado de Supabase es muy limitado (pocos correos por hora y solo a miembros del equipo del proyecto). Para invitaciones reales a cualquier persona configura un SMTP propio (Authentication → Emails → SMTP, p. ej. Resend o Brevo). Mientras tanto usa contraseña temporal.
+- Los roles siguen siendo Administrador y Cajero. Bodega, Contabilidad y roles con permisos propios llegan en una etapa posterior.
+

@@ -11,3 +11,6 @@
 
 -- ===== Migración 15 (importar_productos). Resultado esperado (rollback) =====
 -- PRUEBAS_OK cajero_no_importa;vacio_rechazado;sede_ajena;preview_sin_escribir;validaciones;crea_con_inventarios;reimport_actualiza_sin_tocar_stock;sin_duplicar;
+
+-- ===== Migración 16 (equipo). Resultado esperado (rollback) =====
+-- PRUEBAS_OK anon_no;cajero_no_lista;cajero_no_crea;lista_ok;aislado;correo_invalido;sede_ajena;sede_autoservicio_no;rol_ajeno;correo_repetido;correo_de_otro_comercio_bloqueado;crea_normaliza;persona_ajena;actualizar_ajena;no_se_desactiva_a_si_mismo;no_se_quita_admin;rol_ajeno_update;cambia_rol_sede;desactivada_sin_acceso;reactivada;accion_cerrada;registrar_ajena;eventos;descartar;

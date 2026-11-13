@@ -25,3 +25,4 @@ Surtify es una aplicación web instalable: `manifest.webmanifest`, `sw.js` e íc
 - Al cambiar `index.html`, sube la versión `V` en `sw.js` si quieres forzar la renovación de la copia guardada.
 - **Carga masiva por Excel:** en Inventario, el administrador descarga una plantilla, sube su lista de productos (xlsx/CSV), revisa el resumen con errores por fila y confirma. Reimportar actualiza precios sin pisar el stock.
 - Plantilla pública para el tendero (con instrucciones): https://infoner0677.github.io/Surtify/assets/plantilla_productos_surtify.xlsx
+- **Equipo:** el administrador agrega personas, les da acceso (contraseña temporal o correo de invitación), cambia rol/sede, restablece contraseñas y desactiva/reactiva accesos desde la pestaña Equipo, sin tocar la base de datos.
