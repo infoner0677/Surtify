@@ -1,0 +1,10 @@
+-- =============================================================================
+-- SURTIFY · 20_cuenta_aviso_y_autorizacion.sql
+--   "Mi cuenta" avisa de la deuda (solo si el dueño activó los recordatorios y la deuda ya pasó sus días de inicio y su
+--   valor mínimo) y deja que el propio cliente autorice o rechace los recordatorios por WhatsApp.
+--   * app.cuenta_cliente devuelve además: id_comercio, recordatorios_ok, aviso.
+--   * cuenta_recordatorios_google(id_comercio, valor): cliente con sesión de Google (cuenta aprobada en esa tienda).
+--   * cuenta_recordatorios_enlace(token, pin, valor): cliente con enlace + PIN (reutiliza el bloqueo por intentos).
+--   Cada decisión queda en equipo_eventos. Ver la definición aplicada en el proyecto (migración 20).
+-- Pruebas con rollback: PRUEBAS_OK aviso_segun_config_del_dueno;autoriza_por_enlace;autoriza_por_google;aislado;eventos;anon_no_google;
+-- =============================================================================

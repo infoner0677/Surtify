@@ -161,3 +161,7 @@ for f in tests/00_shim_supabase_local.sql 01_esquema.sql 02_funciones_y_triggers
 - `recordatorios_pendientes` (lista), `recordatorio_registrar` (revalida todo, guarda el envío en `recordatorios_enviados` y devuelve teléfono y mensaje), `recordatorios_config[_guardar]`, `cliente_recordatorios`. Quedan eventos de auditoría.
 - Pruebas: `tests/95_pruebas_recordatorios.sql`.
 
+## 20 · Mi cuenta avisa y el cliente autoriza recordatorios
+- `app.cuenta_cliente` devuelve `aviso` (verdadero solo si el dueño activó los recordatorios y la deuda superó sus días de inicio y su valor mínimo), `recordatorios_ok` e `id_comercio`. Así **el dueño decide también si "Mi cuenta" avisa**.
+- El cliente autoriza o rechaza los recordatorios desde su cuenta: `cuenta_recordatorios_google(id_comercio, valor)` o `cuenta_recordatorios_enlace(token, pin, valor)`. Es la autorización más sólida (la da el propio cliente) y queda en el registro.
+

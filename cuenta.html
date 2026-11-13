@@ -43,7 +43,7 @@ const cop=n=>new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maxi
 const fecha=d=>new Date(d).toLocaleDateString('es-CO',{day:'numeric',month:'short',year:'numeric',timeZone:'America/Bogota'});
 function toast(m,bad){const t=$('#toast');t.textContent=m;t.style.background=bad?'var(--er)':'var(--tx)';t.style.color=bad?'#fff':'var(--bg)';t.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(()=>{t.style.display='none'},4500)}
 const LOGO='<img class="logo" src="assets/logo.png" alt="Surtify">';
-let db,TOKEN=null,PIN='';
+let db,TOKEN=null,PIN='',MODO='';
 
 /* ---------- Cómo se muestra una cuenta ---------- */
 function cuentaHtml(c){
@@ -53,6 +53,10 @@ function cuentaHtml(c){
     ${debe?`<div class="mu">Tu saldo pendiente</div><div class="big er">${cop(c.saldo)}</div>${c.deuda_desde?`<div class="mu">Debes desde el ${esc(fecha(c.deuda_desde))} (hace ${dias} ${dias===1?'día':'días'})</div>`:''}`
       :`<div class="big ok">Estás al día ✓</div><div class="mu">No tienes saldo pendiente.</div>`}
     ${Number(c.cupo)>0?`<div class="meter"><i style="width:${usado}%"></i></div><div class="row mu"><span class="sp">Cupo de fiado: ${cop(c.cupo)}</span><span>Disponible: ${cop(c.disponible)}</span></div>`:''}</div>
+  ${c.aviso?`<div class="card pago"><b>Tienes un saldo pendiente de ${cop(c.saldo)}</b>${dias!==null?` desde hace ${dias} ${dias===1?'día':'días'}`:''}. Cuando puedas, ponte al día con tu tienda.</div>`:''}
+  ${debe?`<div class="card"><h2>Recordatorios por WhatsApp</h2>${c.recordatorios_ok===true?`<p class="mu" style="margin:0 0 10px">Recibes recordatorios de tu tienda cuando tengas saldo pendiente (máximo uno por semana, en horario hábil).</p><button class="g" data-rec="false" data-com="${c.id_comercio}">Dejar de recibirlos</button>`
+    :c.recordatorios_ok===false?`<p class="mu" style="margin:0 0 10px">No recibes recordatorios.</p><button class="g" data-rec="true" data-com="${c.id_comercio}">Quiero recibirlos</button>`
+    :`<p class="mu" style="margin:0 0 10px">¿Quieres que tu tienda te recuerde por WhatsApp cuando tengas saldo pendiente? Máximo uno por semana, en horario hábil, y puedes cambiar de opinión cuando quieras.</p><div class="row"><button data-rec="true" data-com="${c.id_comercio}" class="sp">Sí, quiero</button><button class="g sp" data-rec="false" data-com="${c.id_comercio}">No, gracias</button></div>`}</div>`:''}
   ${debe&&c.como_pagar&&c.como_pagar.llave?`<div class="card pago"><h2>Cómo pagar</h2><p style="margin:0 0 6px">Paga por Bre-B a la llave <b>${esc(c.como_pagar.llave)}</b>${c.como_pagar.titular?` (${esc(c.como_pagar.titular)})`:''} y avísale a la tienda para que registre tu abono.</p>
     <button class="g s" data-copiar="${esc(c.como_pagar.llave)}">Copiar llave</button></div>`:''}
   <div class="card"><h2>Movimientos</h2>${(c.movimientos||[]).length?c.movimientos.map(x=>{
@@ -61,6 +65,10 @@ function cuentaHtml(c){
     return det?`<div class="line"><details style="width:100%"><summary>${cab}<div class="mu" style="margin-top:2px">Ver qué compré ▾</div></summary><div class="det">${x.lineas.map(l=>`<div class="row"><span class="sp">${esc(l.cantidad)} × ${esc(l.producto)}</span><span>${cop(l.total)}</span></div>`).join('')}</div></details></div>`:`<div class="line">${cab}</div>`;
   }).join(''):'<span class="mu">Todavía no hay movimientos.</span>'}</div>`;
 }
+function bindRec(){app.querySelectorAll('[data-rec]').forEach(b=>b.onclick=async()=>{const v=b.dataset.rec==='true';b.disabled=true;
+  const {data,error}=MODO==='enlace'?await db.rpc('cuenta_recordatorios_enlace',{p_token:TOKEN,p_pin:PIN,p_valor:v}):await db.rpc('cuenta_recordatorios_google',{p_id_comercio:Number(b.dataset.com),p_valor:v});
+  if(error||!data||!data.ok){b.disabled=false;toast((data&&data.error)||(error&&error.message)||'No se pudo guardar',true);return}
+  toast(v?'Listo, te recordaremos':'Listo, no te enviaremos recordatorios');MODO==='enlace'?verPorEnlace():vistaGoogle()});}
 function bindCopiar(){app.querySelectorAll('[data-copiar]').forEach(b=>b.onclick=async()=>{try{await navigator.clipboard.writeText(b.dataset.copiar);toast('Copiado')}catch(e){toast('No se pudo copiar',true)}})}
 
 /* ---------- Entrada B: enlace + PIN ---------- */
@@ -78,7 +86,7 @@ async function verPorEnlace(){
   if(error){PIN='';return pantallaPin('No pudimos conectar. Revisa tu internet e inténtalo de nuevo.')}
   if(!data.ok){PIN='';return pantallaPin(data.error)}
   app.innerHTML=LOGO+cuentaHtml(data.cuenta)+`<button class="g" id="rf">Actualizar</button><button class="g" id="sl" style="margin-top:8px">Salir</button><p class="mu" style="text-align:center">Solo tú ves esta información.</p>`;
-  $('#rf').onclick=verPorEnlace;$('#sl').onclick=()=>{PIN='';pantallaPin()};bindCopiar();
+  $('#rf').onclick=verPorEnlace;$('#sl').onclick=()=>{PIN='';pantallaPin()};bindCopiar();bindRec();
 }
 
 /* ---------- Entrada A: Google ---------- */
@@ -114,14 +122,15 @@ async function vistaGoogle(){
   app.innerHTML=LOGO+(cs.length?cs.map(c=>c.estado==='Aprobado'?cuentaHtml(c):`<div class="card"><div class="mu">${esc(c.comercio)}</div><h2>Tu solicitud está en revisión</h2><p class="mu" style="margin:0">El dueño de la tienda la revisará pronto. Cuando la apruebe verás tu cuenta aquí.</p></div>`).join('')
     :`<div class="card"><h2>Aún no tienes cuenta de fiado aquí</h2><p class="mu" style="margin:0">Si tu tienda ya te tiene registrado, vincúlate con un código. Si compras en su autoservicio, la solicitud de fiado se hace allí.</p></div>`)
     +formVincular()+`<button class="g" id="rf">Actualizar</button><button class="g" id="so" style="margin-top:8px">Cerrar sesión</button>`;
-  $('#rf').onclick=vistaGoogle;$('#so').onclick=async()=>{await db.auth.signOut();pantallaLogin()};bindCopiar();bindVincular();
+  $('#rf').onclick=vistaGoogle;$('#so').onclick=async()=>{await db.auth.signOut();pantallaLogin()};bindCopiar();bindRec();bindVincular();
 }
 
 async function init(){
   const c=window.SURTIFY||{};
   const m=/[#&]t=([0-9a-f]{48})(?:&|$)/.exec(location.hash);
   db=supabase.createClient(c.SUPABASE_URL,c.SUPABASE_ANON_KEY,{auth:{storageKey:'surtify-cliente',persistSession:!m,autoRefreshToken:!m,detectSessionInUrl:!m}});
-  if(m){TOKEN=m[1];return pantallaPin()}
+  if(m){TOKEN=m[1];MODO='enlace';return pantallaPin()}
+  MODO='google';
   let u=null;try{const s=await db.auth.getSession();u=s.data&&s.data.session?s.data.session.user:null}catch(e){}
   if(u)vistaGoogle();else pantallaLogin();
 }
