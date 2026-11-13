@@ -382,8 +382,10 @@ async function verCliente(id){
       <button id="ar" style="width:100%">Registrar abono</button>
       ${e.telefono?`<button class="g" id="aw" style="width:100%;margin-top:6px">Recordar por WhatsApp</button>`:'<p class="mu">Agrega el celular del cliente para poder recordarle por WhatsApp.</p>'}`:'<p class="ok"><b>Está al día</b></p>'}
     <h2 style="margin-top:12px">Movimientos</h2><div style="max-height:220px;overflow:auto">${e.movimientos.length?e.movimientos.map(x=>`<div class="line"><span class="sp">${esc(x.tipo)}${x.metodo_pago&&x.tipo==='Abono'?' · '+esc(x.metodo_pago):''}<div class="mu">${hora(x.fecha)}${x.nota?' · '+esc(x.nota):''}</div></span><b class="${x.tipo==='Cargo'?'er':'ok'}">${sg[x.tipo]||''}${cop(x.monto)}</b></div>`).join(''):'<span class="mu">Sin movimientos</span>'}</div>
-    <button class="g" id="ac" style="width:100%;margin-top:10px">Cerrar</button>`);
+    <button class="g" id="acc" style="width:100%;margin-top:10px">🔑 Acceso del cliente a su cuenta</button>
+    <button class="g" id="ac" style="width:100%;margin-top:6px">Cerrar</button>`);
   m.querySelector('#ac').onclick=()=>m.remove();
+  m.querySelector('#acc').onclick=()=>{m.remove();accesoCliente(id,e.nombre,e.telefono)};
   if(debe){
     m.querySelector('#ar').onclick=async()=>{const a=await call('registrar_abono',{p_id_cliente:id,p_monto:Number($('#am').value),p_metodo_pago:$('#ap').value});
       if(a.data){m.remove();toast('Abono registrado. Saldo: '+cop(a.data.saldo_nuevo));await refresh();
@@ -394,6 +396,48 @@ async function verCliente(id){
   }
 }
 
+
+/* ---------- Acceso del cliente a "Mi cuenta" (enlace + PIN, o código para vincular su Google) ---------- */
+const urlCuenta=()=>location.origin+location.pathname.replace(/[^/]*$/,'')+'cuenta.html';
+async function accesoCliente(id,nombre,tel){
+  const r=await call('cliente_acceso_estado',{p_id_cliente:id});if(!r.data)return;const e=r.data,fe=d=>new Date(d).toLocaleDateString('es-CO',{day:'numeric',month:'short'});
+  const wa=txt=>window.open('https://wa.me/'+(tel?waTel(tel):'')+'?text='+encodeURIComponent(txt),'_blank','noopener');
+  const m=modal(`<h2>Acceso de ${esc(nombre)}</h2><p class="mu">Así ${esc(nombre.split(' ')[0])} puede ver cuánto debe, qué compró y cómo pagar. Cada acceso es personal.</p>
+    <div class="line"><span class="sp">Google</span><b>${e.google==='Aprobado'?'<span class="ok">Vinculado</span>':e.google==='Pendiente'?'<span class="wa">Solicitud pendiente</span>':'<span class="mu">No</span>'}</b></div>
+    <div class="line"><span class="sp">Enlace + PIN</span><b>${e.enlace?`<span class="ok">Activo</span> <span class="mu">hasta ${fe(e.enlace.expira)}${e.enlace.ultimo_uso?' · último uso '+fe(e.enlace.ultimo_uso):''}${e.enlace.bloqueado?' · bloqueado por intentos':''}</span>`:'<span class="mu">No</span>'}</b></div>
+    ${e.codigo?`<div class="line"><span class="sp">Código pendiente</span><span class="mu">vence ${fe(e.codigo.expira)}</span></div>`:''}
+    <button style="width:100%;margin-top:10px" id="ael">${e.enlace?'Generar enlace y PIN nuevos':'Crear enlace + PIN'}</button>
+    <div class="mu" style="margin:2px 0 8px">Para quien no usa Google. ${e.enlace?'Reemplaza el anterior (el viejo deja de servir).':''}</div>
+    ${e.google&&e.google!=='Rechazado'?'':`<button class="g" style="width:100%" id="aco">Código para vincular su Google</button><div class="mu" style="margin:2px 0 8px">Para que entre con su cuenta de Google. Se usa una sola vez.</div>`}
+    ${(e.google&&e.google!=='Rechazado')||e.enlace||e.codigo?'<button class="g" style="width:100%;margin-bottom:6px" id="aqt">Quitar todos sus accesos</button>':''}
+    <button class="g" style="width:100%" id="acx">Cerrar</button>`);
+  m.querySelector('#acx').onclick=()=>m.remove();
+  const crear=async tipo=>{if(busy)return;const d=await call('cliente_acceso_crear',{p_id_cliente:id,p_tipo:tipo});if(!d.data)return;m.remove();entregaAcceso(nombre,tel,d.data)};
+  m.querySelector('#ael').onclick=()=>crear('enlace');
+  const co=m.querySelector('#aco');if(co)co.onclick=()=>crear('codigo');
+  const qt=m.querySelector('#aqt');if(qt)qt.onclick=()=>{
+    const m2=modal(`<h2>¿Quitar los accesos de ${esc(nombre)}?</h2><p class="mu">Deja de poder ver su cuenta y de pedir fiado en el autoservicio. Su deuda y su historial no se borran. Puedes darle un acceso nuevo cuando quieras.</p><div class="row"><button class="g sp" id="n">Cancelar</button><button class="sp" id="s">Quitar</button></div>`);
+    m2.querySelector('#n').onclick=()=>m2.remove();
+    m2.querySelector('#s').onclick=async()=>{const d=await call('cliente_acceso_revocar',{p_id_cliente:id,p_que:'todo'});if(!d.error){m2.remove();m.remove();toast('Accesos quitados')}}};
+}
+function entregaAcceso(nombre,tel,d){
+  const pri=nombre.split(' ')[0],wa=txt=>window.open('https://wa.me/'+(tel?waTel(tel):'')+'?text='+encodeURIComponent(txt),'_blank','noopener');
+  if(d.tipo==='enlace'){
+    const url=urlCuenta()+'#t='+d.token,msg1=`Hola ${pri}, este es tu enlace personal para ver tu cuenta de fiado en la tienda:\n${url}\nEl PIN te lo envío en otro mensaje. No compartas el enlace.`,msg2=`Tu PIN para ver tu cuenta es: ${d.pin}`;
+    const m=modal(`<h2 class="ok">Acceso listo</h2><p>Envíale a <b>${esc(nombre)}</b> el enlace y, <b>en un mensaje aparte</b>, el PIN. <b>El PIN no se vuelve a mostrar.</b></p>
+      <div class="line"><span class="sp">PIN</span><b style="font-family:monospace;font-size:1.4rem;letter-spacing:.2em">${esc(d.pin)}</b></div>
+      <div class="mu" style="word-break:break-all;margin:6px 0">${esc(url)}</div>
+      <button style="width:100%;margin-top:6px" id="e1">1) Enviar enlace por WhatsApp</button><button style="width:100%;margin-top:6px" id="e2">2) Enviar PIN por WhatsApp</button>
+      <button class="g" style="width:100%;margin-top:6px" id="e3">Copiar enlace</button><button class="g" style="width:100%;margin-top:6px" id="ex">Listo</button>`);
+    m.querySelector('#e1').onclick=()=>wa(msg1);m.querySelector('#e2').onclick=()=>wa(msg2);
+    m.querySelector('#e3').onclick=async()=>{try{await navigator.clipboard.writeText(url);toast('Enlace copiado')}catch(x){toast('No se pudo copiar',true)}};
+    m.querySelector('#ex').onclick=()=>m.remove();return}
+  const msg=`Hola ${pri}, para ver tu cuenta de fiado entra a ${urlCuenta()} , inicia sesión con Google y escribe este código de vinculación: ${d.codigo}\nEl código sirve una sola vez y vence en 7 días.`;
+  const m=modal(`<h2 class="ok">Código listo</h2><p>${esc(nombre)} entra a la página de su cuenta, inicia con Google y escribe este código (sirve una sola vez, vence en 7 días).</p>
+    <div class="line"><span class="sp">Código</span><b style="font-family:monospace;font-size:1.5rem;letter-spacing:.15em">${esc(d.codigo)}</b></div>
+    <button style="width:100%;margin-top:8px" id="e1">Enviar por WhatsApp</button><button class="g" style="width:100%;margin-top:6px" id="ex">Listo</button>`);
+  m.querySelector('#e1').onclick=()=>wa(msg);m.querySelector('#ex').onclick=()=>m.remove();
+}
 
 /* ---------- Nueva contraseña (invitación, recuperación o contraseña temporal) ---------- */
 function nuevaClave(titulo){
@@ -425,7 +469,7 @@ async function eqInvocar(body){
 }
 const EQ_TXT={agregado:(a,p)=>`agregó a ${p}`,desactivado:(a,p)=>`desactivó a ${p}`,reactivado:(a,p)=>`reactivó a ${p}`,rol:(a,p,d)=>`cambió el rol de ${p} a ${d}`,
   sede:(a,p,d)=>`movió a ${p} a ${d}`,acceso_creado:(a,p)=>`entregó acceso a ${p}`,invitacion:(a,p)=>`envió invitación a ${p}`,clave_restablecida:(a,p)=>`restableció la contraseña de ${p}`,
-  rol_creado:(a,p,d)=>`creó el rol ${d}`,rol_editado:(a,p,d)=>`cambió los permisos del rol ${d}`,rol_eliminado:(a,p,d)=>`eliminó el rol ${d}`};
+  rol_creado:(a,p,d)=>`creó el rol ${d}`,rol_editado:(a,p,d)=>`cambió los permisos del rol ${d}`,rol_eliminado:(a,p,d)=>`eliminó el rol ${d}`,cliente_acceso:(a,p,d)=>`— ${d}`};
 /* ---------- Roles y permisos (casillas) ---------- */
 let rolData=null;
 async function vRoles(){

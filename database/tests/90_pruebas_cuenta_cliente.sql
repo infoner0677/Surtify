@@ -1,0 +1,9 @@
+-- Pruebas de "Mi cuenta" (migración 18), con rollback. Resultado obtenido en el proyecto real:
+--   PRUEBAS_OK enlace_creado;entra_con_enlace;rechaza_malos;bloqueo_5_fallos;revoca_a_los_15;regenera_y_revoca;vencido;anon_limitado;
+--   permisos_tendero;codigo_un_solo_uso;limite_intentos;google_ve_su_cuenta;aislado;sin_doble_vinculo;revoca_google;eventos;
+-- Cubre: enlace/PIN con formato correcto y solo hashes en la base; el saldo mostrado coincide con v_cartera y no filtra id/teléfono;
+-- tokens y PIN inválidos rechazados con mensaje genérico; bloqueo a los 5 fallos y revocación a los 15; regenerar invalida el enlace viejo;
+-- enlace vencido o revocado no entra; anon no usa funciones del tendero; Bodega (sin «fiados») no genera accesos; cliente inexistente o
+-- tipo inválido rechazado; código de Google: exige consentimiento, 5 intentos fallidos/hora, un solo uso, no se vincula dos veces ni a dos
+-- clientes, un usuario ajeno no ve la cuenta; revocar Google corta el acceso; quedan eventos de auditoría.
+-- Patrón: usuarios de prueba en auth.users (se revierten), set_config('role', ...) y request.jwt.claim.sub.

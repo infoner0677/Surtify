@@ -146,3 +146,11 @@ for f in tests/00_shim_supabase_local.sql 01_esquema.sql 02_funciones_y_triggers
 - Datos iniciales: los roles no administradores existentes conservan lo que hacían (vender, fiados, reportes de su sede) y se crean **Bodega** (inventario, compras) y **Contabilidad** (reportes, fiados, panel, todas las sedes).
 - Funciones: `roles_listar`, `roles_guardar(id, nombre, descripcion, permisos[])`, `roles_eliminar`; `perfil_actual` devuelve `permisos`. En la app: Equipo → **Roles** (casillas) y menú según permisos.
 - Pruebas: `tests/80_pruebas_roles.sql`.
+
+## 18 · Mi cuenta (el cliente ve su deuda)
+- Página pública `cuenta.html`: saldo, cupo disponible, desde cuándo debe (los abonos se aplican a la compra más vieja), cada compra con lo que se llevó, abonos y la llave Bre-B para pagar. Un cliente solo ve **su** cuenta.
+- **Dos formas de entrar.** A) Google: los clientes del autoservicio ya entran así; a un cliente que el tendero creó a mano se le da un **código de vinculación** (8 caracteres, un solo uso, vence en 7 días) que escribe una vez con su sesión de Google (`cuenta_vincular_codigo`, con consentimiento Ley 1581). B) **Enlace personal + PIN de 6 dígitos** para quien no usa Google (`cuenta_por_enlace`, sin sesión): el secreto del enlace (192 bits) va en el fragmento `#t=` de la URL (no viaja al servidor) y el PIN se entrega en un mensaje aparte.
+- Seguridad: enlace y código se guardan como SHA-256 y el PIN con bcrypt (nada en claro); PIN: bloqueo de 15 min cada 5 fallos y el enlace se revoca a los 15; código: 5 fallos por hora por usuario; el enlace vence a los 90 días; respuestas genéricas que no revelan si un enlace existe; las tablas `cliente_accesos` y `cliente_vinculo_intentos` no son accesibles desde el cliente.
+- Tendero (permiso `fiados`): `cliente_acceso_crear(id, 'enlace'|'codigo')`, `cliente_acceso_estado`, `cliente_acceso_revocar(id, 'enlace'|'codigo'|'google'|'todo')`. En la app: Fiados → cliente → **🔑 Acceso del cliente a su cuenta** (envío por WhatsApp del enlace y del PIN en mensajes separados). Cada acción queda en el registro de movimientos.
+- Pruebas: `tests/90_pruebas_cuenta_cliente.sql`.
+

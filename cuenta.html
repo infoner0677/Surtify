@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="es"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b7a5a">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex,nofollow">
+<title>Surtify · Mi cuenta</title>
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<style>
+:root{color-scheme:light dark;--bg:#f4f6f8;--card:#fff;--tx:#18202a;--mu:#667085;--pr:#0b7a5a;--on:#fff;--bd:#e2e6ea;--er:#b42318;--ok:#067647;--wa:#b54708;--wab:#fffaeb}
+@media(prefers-color-scheme:dark){:root{--bg:#10151b;--card:#19202a;--tx:#edf0f3;--mu:#98a2b3;--pr:#2fb386;--on:#06241a;--bd:#2a323d;--er:#f97066;--ok:#47cd89;--wa:#fdb022;--wab:#2a2110}}
+*{box-sizing:border-box}html,body{margin:0}
+body{background:var(--bg);color:var(--tx);font:17px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0)}
+.w{max-width:560px;margin:0 auto;padding:14px}
+h2{font-size:1.1rem;margin:0 0 8px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:16px;margin-bottom:12px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.sp{flex:1}
+.mu{color:var(--mu);font-size:.88rem}.er{color:var(--er)}.ok{color:var(--ok)}.wa{color:var(--wa)}
+input{width:100%;padding:14px;border:1px solid var(--bd);border-radius:10px;background:var(--bg);color:var(--tx);font:inherit;margin:4px 0 10px}
+input[type=checkbox]{width:auto;margin:0 8px 0 0}
+label{display:block;font-size:.95rem}
+button{font:inherit;border:0;border-radius:10px;padding:14px 16px;background:var(--pr);color:var(--on);font-weight:600;cursor:pointer;width:100%}
+button.g{background:transparent;color:var(--tx);border:1px solid var(--bd)}button.s{padding:8px 12px;width:auto}button:disabled{opacity:.5}
+.logo{display:block;width:min(240px,66%);height:auto;margin:8px auto 4px}
+.big{font-size:2.2rem;font-weight:800;line-height:1.1}
+.meter{height:8px;border-radius:4px;background:var(--bd);margin:6px 0 4px;overflow:hidden}.meter i{display:block;height:100%;background:var(--pr)}
+.line{display:flex;gap:8px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--bd)}.line:last-child{border:0}
+details summary{cursor:pointer;list-style:none}details summary::-webkit-details-marker{display:none}
+.det{margin:6px 0 0;padding:8px 10px;background:var(--bg);border-radius:8px;font-size:.9rem}
+.pin{letter-spacing:.4em;text-align:center;font-size:1.6rem}
+.pago{background:var(--wab);border:1px solid var(--wa)}
+#toast{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0));background:var(--tx);color:var(--bg);padding:12px;border-radius:10px;display:none;z-index:99}
+[hidden]{display:none!important}
+</style></head>
+<body><div class="w" id="app"></div><div id="toast"></div>
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+const $=s=>document.querySelector(s),app=$('#app');
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const cop=n=>new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0}).format(n||0);
+const fecha=d=>new Date(d).toLocaleDateString('es-CO',{day:'numeric',month:'short',year:'numeric',timeZone:'America/Bogota'});
+function toast(m,bad){const t=$('#toast');t.textContent=m;t.style.background=bad?'var(--er)':'var(--tx)';t.style.color=bad?'#fff':'var(--bg)';t.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(()=>{t.style.display='none'},4500)}
+const LOGO='<img class="logo" src="assets/logo.png" alt="Surtify">';
+let db,TOKEN=null,PIN='';
+
+/* ---------- Cómo se muestra una cuenta ---------- */
+function cuentaHtml(c){
+  const debe=Number(c.saldo)>0,usado=Number(c.cupo)>0?Math.min(100,Math.max(0,Number(c.saldo)/Number(c.cupo)*100)):0;
+  const dias=c.deuda_desde?Math.max(0,Math.floor((Date.now()-new Date(c.deuda_desde))/864e5)):null;
+  return `<div class="card"><div class="mu">${esc(c.comercio)}</div><h2 style="margin:2px 0 10px">Hola, ${esc((c.nombre||'').split(' ')[0])}</h2>
+    ${debe?`<div class="mu">Tu saldo pendiente</div><div class="big er">${cop(c.saldo)}</div>${c.deuda_desde?`<div class="mu">Debes desde el ${esc(fecha(c.deuda_desde))} (hace ${dias} ${dias===1?'día':'días'})</div>`:''}`
+      :`<div class="big ok">Estás al día ✓</div><div class="mu">No tienes saldo pendiente.</div>`}
+    ${Number(c.cupo)>0?`<div class="meter"><i style="width:${usado}%"></i></div><div class="row mu"><span class="sp">Cupo de fiado: ${cop(c.cupo)}</span><span>Disponible: ${cop(c.disponible)}</span></div>`:''}</div>
+  ${debe&&c.como_pagar&&c.como_pagar.llave?`<div class="card pago"><h2>Cómo pagar</h2><p style="margin:0 0 6px">Paga por Bre-B a la llave <b>${esc(c.como_pagar.llave)}</b>${c.como_pagar.titular?` (${esc(c.como_pagar.titular)})`:''} y avísale a la tienda para que registre tu abono.</p>
+    <button class="g s" data-copiar="${esc(c.como_pagar.llave)}">Copiar llave</button></div>`:''}
+  <div class="card"><h2>Movimientos</h2>${(c.movimientos||[]).length?c.movimientos.map(x=>{
+    const cargo=x.tipo==='Cargo',det=cargo&&x.lineas&&x.lineas.length;
+    const cab=`<div class="row" style="width:100%"><span class="sp"><b>${cargo?'Compra a fiado':esc(x.tipo)}</b>${x.metodo_pago&&!cargo?' · '+esc(x.metodo_pago):''}${x.factura?` · <span class="mu">${esc(x.factura)}</span>`:''}<div class="mu">${esc(fecha(x.fecha))}</div></span><b class="${cargo?'er':'ok'}">${cargo?'+':'−'}${cop(x.monto)}</b></div>`;
+    return det?`<div class="line"><details style="width:100%"><summary>${cab}<div class="mu" style="margin-top:2px">Ver qué compré ▾</div></summary><div class="det">${x.lineas.map(l=>`<div class="row"><span class="sp">${esc(l.cantidad)} × ${esc(l.producto)}</span><span>${cop(l.total)}</span></div>`).join('')}</div></details></div>`:`<div class="line">${cab}</div>`;
+  }).join(''):'<span class="mu">Todavía no hay movimientos.</span>'}</div>`;
+}
+function bindCopiar(){app.querySelectorAll('[data-copiar]').forEach(b=>b.onclick=async()=>{try{await navigator.clipboard.writeText(b.dataset.copiar);toast('Copiado')}catch(e){toast('No se pudo copiar',true)}})}
+
+/* ---------- Entrada B: enlace + PIN ---------- */
+function pantallaPin(msg){
+  app.innerHTML=`${LOGO}<div class="card"><h2>Mi cuenta de fiado</h2><p class="mu">Escribe el PIN de 6 números que te dio tu tienda.</p>
+    <input id="pin" class="pin" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••">
+    ${msg?`<p class="er" style="margin:0 0 10px">${esc(msg)}</p>`:''}<button id="ok">Ver mi cuenta</button></div>
+    <p class="mu" style="text-align:center">Si no tienes el PIN, pídeselo a tu tienda.</p>`;
+  const ir=async()=>{const p=$('#pin').value.trim();if(!/^\d{6}$/.test(p)){toast('El PIN tiene 6 números',true);return}
+    $('#ok').disabled=true;PIN=p;await verPorEnlace()};
+  $('#ok').onclick=ir;$('#pin').addEventListener('keydown',e=>{if(e.key==='Enter')ir()});$('#pin').focus();
+}
+async function verPorEnlace(){
+  const {data,error}=await db.rpc('cuenta_por_enlace',{p_token:TOKEN,p_pin:PIN});
+  if(error){PIN='';return pantallaPin('No pudimos conectar. Revisa tu internet e inténtalo de nuevo.')}
+  if(!data.ok){PIN='';return pantallaPin(data.error)}
+  app.innerHTML=LOGO+cuentaHtml(data.cuenta)+`<button class="g" id="rf">Actualizar</button><button class="g" id="sl" style="margin-top:8px">Salir</button><p class="mu" style="text-align:center">Solo tú ves esta información.</p>`;
+  $('#rf').onclick=verPorEnlace;$('#sl').onclick=()=>{PIN='';pantallaPin()};bindCopiar();
+}
+
+/* ---------- Entrada A: Google ---------- */
+async function entrarGoogle(){
+  const {error}=await db.auth.signInWithOAuth({provider:'google',options:{redirectTo:location.origin+location.pathname}});
+  if(error)toast(error.message,true);
+}
+function pantallaLogin(){
+  app.innerHTML=`${LOGO}<div class="card"><h2>Mi cuenta de fiado</h2><p class="mu">Mira cuánto debes, qué compraste y cómo pagar.</p>
+    <button id="gl">Entrar con Google</button></div>
+    <div class="card"><h2>¿Tu tienda te envió un enlace?</h2><p class="mu" style="margin:0">Ábrelo desde el mensaje que te enviaron: ese enlace es personal. Allí escribes tu PIN.</p></div>`;
+  $('#gl').onclick=entrarGoogle;
+}
+function formVincular(){
+  return `<div class="card"><h2>Vincular mi cuenta con un código</h2><p class="mu">Si tu tienda ya te tiene registrado, pídele un <b>código de vinculación</b> y escríbelo aquí. Solo se usa una vez.</p>
+    <input id="cod" placeholder="ABCD-EFGH" autocapitalize="characters" autocomplete="off" maxlength="9">
+    <label style="margin-bottom:10px"><input type="checkbox" id="ac">Autorizo a la tienda a tratar mis datos para llevar mi cuenta de fiado (Ley 1581 de 2012).</label>
+    <button id="vc">Vincular</button></div>`;
+}
+function bindVincular(){
+  const b=$('#vc');if(!b)return;
+  b.onclick=async()=>{const cod=$('#cod').value.trim();if(cod.replace(/[^A-Za-z0-9]/g,'').length!==8){toast('El código tiene 8 caracteres',true);return}
+    if(!$('#ac').checked){toast('Debes autorizar el tratamiento de tus datos',true);return}
+    b.disabled=true;const {data,error}=await db.rpc('cuenta_vincular_codigo',{p_codigo:cod,p_acepta:true});b.disabled=false;
+    if(error){toast(error.message,true);return}
+    if(!data.ok){toast(data.error,true);return}
+    toast('¡Listo! Tu cuenta quedó vinculada');vistaGoogle()};
+}
+async function vistaGoogle(){
+  const {data,error}=await db.rpc('cuenta_google');
+  if(error){toast(error.message,true);return}
+  const cs=data.cuentas||[];
+  app.innerHTML=LOGO+(cs.length?cs.map(c=>c.estado==='Aprobado'?cuentaHtml(c):`<div class="card"><div class="mu">${esc(c.comercio)}</div><h2>Tu solicitud está en revisión</h2><p class="mu" style="margin:0">El dueño de la tienda la revisará pronto. Cuando la apruebe verás tu cuenta aquí.</p></div>`).join('')
+    :`<div class="card"><h2>Aún no tienes cuenta de fiado aquí</h2><p class="mu" style="margin:0">Si tu tienda ya te tiene registrado, vincúlate con un código. Si compras en su autoservicio, la solicitud de fiado se hace allí.</p></div>`)
+    +formVincular()+`<button class="g" id="rf">Actualizar</button><button class="g" id="so" style="margin-top:8px">Cerrar sesión</button>`;
+  $('#rf').onclick=vistaGoogle;$('#so').onclick=async()=>{await db.auth.signOut();pantallaLogin()};bindCopiar();bindVincular();
+}
+
+async function init(){
+  const c=window.SURTIFY||{};
+  const m=/[#&]t=([0-9a-f]{48})(?:&|$)/.exec(location.hash);
+  db=supabase.createClient(c.SUPABASE_URL,c.SUPABASE_ANON_KEY,{auth:{storageKey:'surtify-cliente',persistSession:!m,autoRefreshToken:!m,detectSessionInUrl:!m}});
+  if(m){TOKEN=m[1];return pantallaPin()}
+  let u=null;try{const s=await db.auth.getSession();u=s.data&&s.data.session?s.data.session.user:null}catch(e){}
+  if(u)vistaGoogle();else pantallaLogin();
+}
+init();
+</script></body></html>
