@@ -367,7 +367,9 @@ async function vFiados(){
   const deben=cartera.filter(c=>Number(c.saldo)>0),tot=deben.reduce((s,c)=>s+Number(c.saldo),0);
   $('#body').innerHTML=`<div class="card"><div class="row"><h2 style="margin:0">Fiados</h2><span class="sp"></span><button id="nc" class="s">+ Cliente</button></div>
     <div class="kpis" style="margin:10px 0 0"><div><span class="mu">Por cobrar</span><b>${cop(tot)}</b><span class="mu">${pl(deben.length,'cliente')} con deuda</span></div></div></div>
+    <div id="rc"></div>
     <div class="card"><input id="fq" placeholder="Buscar cliente" value="${esc(fiQ)}" autocomplete="off"><div id="fl"></div></div>`;
+  recTarjeta();
   const list=()=>{const t=fiQ.trim().toLowerCase(),rows=cartera.filter(c=>!t||c.nombre.toLowerCase().includes(t)||(c.telefono||'').includes(t));
     $('#fl').innerHTML=rows.length?rows.map(c=>`<button class="g" data-c="${c.id_cliente}" style="width:100%;text-align:left;margin-bottom:6px"><b>${esc(c.nombre)}</b><span style="float:right" class="${Number(c.saldo)>0?'er':'ok'}"><b>${cop(c.saldo)}</b></span><br><span class="mu">${esc(c.telefono||'sin celular')}${c.cupo_fiado!=null?' · cupo '+cop(c.cupo_fiado):''}</span></button>`).join(''):'<span class="mu">Aún no hay clientes. Crea el primero con “+ Cliente”.</span>';
     $('#fl').querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>verCliente(Number(b.dataset.c)))};
@@ -382,10 +384,14 @@ async function verCliente(id){
       <button id="ar" style="width:100%">Registrar abono</button>
       ${e.telefono?`<button class="g" id="aw" style="width:100%;margin-top:6px">Recordar por WhatsApp</button>`:'<p class="mu">Agrega el celular del cliente para poder recordarle por WhatsApp.</p>'}`:'<p class="ok"><b>Está al día</b></p>'}
     <h2 style="margin-top:12px">Movimientos</h2><div style="max-height:220px;overflow:auto">${e.movimientos.length?e.movimientos.map(x=>`<div class="line"><span class="sp">${esc(x.tipo)}${x.metodo_pago&&x.tipo==='Abono'?' · '+esc(x.metodo_pago):''}<div class="mu">${hora(x.fecha)}${x.nota?' · '+esc(x.nota):''}</div></span><b class="${x.tipo==='Cargo'?'er':'ok'}">${sg[x.tipo]||''}${cop(x.monto)}</b></div>`).join(''):'<span class="mu">Sin movimientos</span>'}</div>
+    <div class="line" style="margin-top:10px"><span class="sp">Recordatorios por WhatsApp<div class="mu">¿El cliente aceptó que le recuerdes su deuda?</div></span>
+      <select id="rok" style="width:auto;margin:0"><option value="">Sin registrar</option><option value="true" ${e.recordatorios_ok===true?'selected':''}>Autorizó</option><option value="false" ${e.recordatorios_ok===false?'selected':''}>No quiere</option></select></div>
     <button class="g" id="acc" style="width:100%;margin-top:10px">🔑 Acceso del cliente a su cuenta</button>
     <button class="g" id="ac" style="width:100%;margin-top:6px">Cerrar</button>`);
   m.querySelector('#ac').onclick=()=>m.remove();
   m.querySelector('#acc').onclick=()=>{m.remove();accesoCliente(id,e.nombre,e.telefono)};
+  m.querySelector('#rok').value=e.recordatorios_ok===true?'true':e.recordatorios_ok===false?'false':'';
+  m.querySelector('#rok').onchange=async ev=>{const v=ev.target.value,d=await call('cliente_recordatorios',{p_id_cliente:id,p_valor:v===''?null:v==='true'});if(!d.error)toast(v==='true'?'Quedó registrado que autorizó':v==='false'?'No se le enviarán recordatorios':'Autorización quitada')};
   if(debe){
     m.querySelector('#ar').onclick=async()=>{const a=await call('registrar_abono',{p_id_cliente:id,p_monto:Number($('#am').value),p_metodo_pago:$('#ap').value});
       if(a.data){m.remove();toast('Abono registrado. Saldo: '+cop(a.data.saldo_nuevo));await refresh();
@@ -396,6 +402,44 @@ async function verCliente(id){
   }
 }
 
+
+/* ---------- Recordatorios de cobro (los decide el dueño; el tendero toca enviar) ---------- */
+async function recTarjeta(){
+  const box=$('#rc');if(!box)return;const r=await db.rpc('recordatorios_pendientes');if(!$('#rc')||r.error||!r.data)return;const d=r.data;
+  if(!d.activo){box.innerHTML=adm?`<div class="card"><div class="row"><span class="sp"><b>Recordatorios de cobro</b><div class="mu">Apagados. Tú decides si los quieres y cuándo.</div></span><button class="g s" id="rcf">Configurar</button></div></div>`:'';
+    const b=$('#rcf');if(b)b.onclick=()=>recConfig(()=>recTarjeta());return}
+  const n=d.items.length;
+  box.innerHTML=`<div class="card"><div class="row"><span class="sp"><b>Recordatorios de hoy: ${n}</b>${!d.ventana.ok?`<div class="mu">${esc(d.ventana.motivo)}</div>`:''}
+    ${d.sin_autorizacion?`<div class="mu">${d.sin_autorizacion} ${d.sin_autorizacion===1?'cliente con deuda no ha':'clientes con deuda no han'} autorizado recordatorios (se marca en su ficha).</div>`:''}</span>
+    ${n?`<button class="s" id="rcv">Ver lista</button>`:''}${adm?`<button class="g s" id="rcf">⚙</button>`:''}</div></div>`;
+  const v=$('#rcv');if(v)v.onclick=()=>recLista(d);const b=$('#rcf');if(b)b.onclick=()=>recConfig(()=>recTarjeta());
+}
+function recLista(d){
+  const m=modal(`<h2>Recordatorios de hoy</h2><p class="mu">Toca enviar y se abre WhatsApp con el mensaje listo. Solo a clientes que lo autorizaron, máximo uno por semana.${!d.ventana.ok?`<br><b class="wa">${esc(d.ventana.motivo)}</b>`:''}</p>
+    ${d.items.map(x=>`<div class="line" data-rl="${x.id_cliente}"><span class="sp"><b>${esc(x.nombre)}</b><div class="mu">Debe ${cop(x.saldo)} · hace ${x.dias} días</div></span><button class="s" data-re="${x.id_cliente}" ${d.ventana.ok?'':'disabled'}>Enviar</button></div>`).join('')}
+    <button class="g" style="width:100%;margin-top:10px" id="rx">Cerrar</button>`);
+  m.querySelector('#rx').onclick=()=>{m.remove();recTarjeta()};
+  m.querySelectorAll('[data-re]').forEach(b=>b.onclick=async()=>{if(busy)return;b.disabled=true;
+    const r=await call('recordatorio_registrar',{p_id_cliente:Number(b.dataset.re)});
+    if(!r.data){b.disabled=false;return}
+    window.open('https://wa.me/'+r.data.telefono+'?text='+encodeURIComponent(r.data.mensaje),'_blank','noopener');
+    b.outerHTML='<b class="ok">✓ Enviado</b>'});
+}
+function recConfig(fin){
+  db.rpc('recordatorios_config').then(r=>{if(r.error){toast(r.error.message,true);return}const c=r.data;
+    const m=modal(`<h2>Recordatorios de cobro</h2>
+      <label style="display:flex;gap:8px;align-items:center;margin:6px 0"><input type="checkbox" id="rca" ${c.activo?'checked':''}><b>Activar recordatorios</b></label>
+      <p class="mu">La app no envía nada sola: te arma la lista y tú tocas enviar. Solo de lunes a viernes de 7 a. m. a 7 p. m. y sábados de 8 a. m. a 3 p. m. (nunca domingos ni festivos), máximo un recordatorio por semana por cliente y solo a quien autorizó.</p>
+      <label>Empezar a recordar cuando la deuda tenga (días)<input id="rcd" type="number" min="1" max="365" value="${c.dias_inicio}"></label>
+      <label>Repetir cada (días, mínimo 7)<input id="rcc" type="number" min="7" max="90" value="${c.cada_dias}"></label>
+      <label>No recordar deudas menores a ($)<input id="rcm" type="number" min="0" value="${c.monto_minimo}"></label>
+      <label>Mensaje<textarea id="rcp" rows="4" maxlength="300" style="width:100%;padding:12px;border:1px solid var(--bd);border-radius:10px;background:var(--bg);color:var(--tx);font:inherit;margin:4px 0 4px">${esc(c.plantilla)}</textarea></label>
+      <div class="mu">Puedes usar {nombre}, {tienda} y {saldo} (obligatorio). Sin enlaces.</div>
+      <div class="row" style="margin-top:10px"><button class="g sp" id="rcn">Cancelar</button><button class="sp" id="rcg">Guardar</button></div>`);
+    m.querySelector('#rcn').onclick=()=>m.remove();
+    m.querySelector('#rcg').onclick=async()=>{if(busy)return;const d=await call('recordatorios_config_guardar',{p_activo:m.querySelector('#rca').checked,p_dias_inicio:Number(m.querySelector('#rcd').value),p_cada_dias:Number(m.querySelector('#rcc').value),p_monto_minimo:Number(m.querySelector('#rcm').value),p_plantilla:m.querySelector('#rcp').value});
+      if(!d.error){m.remove();toast('Guardado');if(fin)fin()}}});
+}
 
 /* ---------- Acceso del cliente a "Mi cuenta" (enlace + PIN, o código para vincular su Google) ---------- */
 const urlCuenta=()=>location.origin+location.pathname.replace(/[^/]*$/,'')+'cuenta.html';
@@ -469,7 +513,7 @@ async function eqInvocar(body){
 }
 const EQ_TXT={agregado:(a,p)=>`agregó a ${p}`,desactivado:(a,p)=>`desactivó a ${p}`,reactivado:(a,p)=>`reactivó a ${p}`,rol:(a,p,d)=>`cambió el rol de ${p} a ${d}`,
   sede:(a,p,d)=>`movió a ${p} a ${d}`,acceso_creado:(a,p)=>`entregó acceso a ${p}`,invitacion:(a,p)=>`envió invitación a ${p}`,clave_restablecida:(a,p)=>`restableció la contraseña de ${p}`,
-  rol_creado:(a,p,d)=>`creó el rol ${d}`,rol_editado:(a,p,d)=>`cambió los permisos del rol ${d}`,rol_eliminado:(a,p,d)=>`eliminó el rol ${d}`,cliente_acceso:(a,p,d)=>`— ${d}`};
+  rol_creado:(a,p,d)=>`creó el rol ${d}`,rol_editado:(a,p,d)=>`cambió los permisos del rol ${d}`,rol_eliminado:(a,p,d)=>`eliminó el rol ${d}`,cliente_acceso:(a,p,d)=>`— ${d}`,recordatorio_config:(a,p,d)=>`— ${d}`,recordatorio_cliente:(a,p,d)=>`— ${d}`};
 /* ---------- Roles y permisos (casillas) ---------- */
 let rolData=null;
 async function vRoles(){

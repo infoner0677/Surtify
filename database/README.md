@@ -154,3 +154,10 @@ for f in tests/00_shim_supabase_local.sql 01_esquema.sql 02_funciones_y_triggers
 - Tendero (permiso `fiados`): `cliente_acceso_crear(id, 'enlace'|'codigo')`, `cliente_acceso_estado`, `cliente_acceso_revocar(id, 'enlace'|'codigo'|'google'|'todo')`. En la app: Fiados → cliente → **🔑 Acceso del cliente a su cuenta** (envío por WhatsApp del enlace y del PIN en mensajes separados). Cada acción queda en el registro de movimientos.
 - Pruebas: `tests/90_pruebas_cuenta_cliente.sql`.
 
+## 19 · Recordatorios de cobro (los decide el dueño)
+- La app **no envía nada sola**: arma la lista «a quién recordar hoy» y el tendero toca *Enviar* (se abre WhatsApp con el mensaje listo). Va en Fiados.
+- El dueño (administrador) configura en `recordatorio_config`: activar (apagado por defecto), desde cuántos días de deuda, cada cuánto (mínimo 7), valor mínimo y el mensaje (`{nombre}`, `{tienda}`, `{saldo}`; obligatorio `{saldo}`; sin enlaces).
+- Reglas fijas en la base (buena práctica tomada de la Ley 2300 de 2023): solo lunes a viernes 7:00–19:00 y sábados 8:00–15:00 hora de Colombia, nunca domingos ni festivos (los festivos se calculan: fijos, trasladados al lunes y los de Semana Santa); máximo un recordatorio por semana por cliente; solo a clientes con `clientes.recordatorios_ok = true` (el tendero registra en la ficha si autorizó o no quiere); teléfono celular válido; saldo ≥ mínimo.
+- `recordatorios_pendientes` (lista), `recordatorio_registrar` (revalida todo, guarda el envío en `recordatorios_enviados` y devuelve teléfono y mensaje), `recordatorios_config[_guardar]`, `cliente_recordatorios`. Quedan eventos de auditoría.
+- Pruebas: `tests/95_pruebas_recordatorios.sql`.
+

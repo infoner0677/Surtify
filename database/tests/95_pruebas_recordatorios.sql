@@ -1,0 +1,8 @@
+-- Pruebas de recordatorios (migración 19), con rollback. Resultado obtenido en el proyecto real:
+--   PRUEBAS_OK pascua;festivos_2026_2027;ventana;apagado_y_solo_admin;config_validada;lista_filtrada;envia_dentro_del_horario;una_vez_por_semana;
+--   no_quiere;estado_cuenta;espaciado_minimo_dias;pagado_no_aparece;anon_no;
+-- Cubre: Pascua 2024-2027; 18 festivos exactos en 2026 y 2027 (incl. Reyes, San José, Ascensión, Corpus, Sagrado Corazón, Cartagena);
+-- ventana L-V 7:00-19:00 y sáb 8:00-15:00 en hora de Colombia, domingos/festivos cerrados; apagado por defecto; solo el administrador configura;
+-- validaciones (cada_dias >= 7, {saldo} obligatorio, sin enlaces, mínimo >= 0); sin autorización no aparece; mensaje con {nombre}/{saldo}/{tienda};
+-- el envío revalida y respeta el horario; un segundo envío la misma semana se rechaza; «no quiere» sale de la lista; espaciado, mínimo y días de
+-- inicio; un cliente que pagó todo no aparece; anon sin acceso. (La rama de envío depende de la hora real en que se corre la prueba.)
