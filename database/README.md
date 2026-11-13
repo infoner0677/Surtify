@@ -137,5 +137,12 @@ for f in tests/00_shim_supabase_local.sql 01_esquema.sql 02_funciones_y_triggers
 - Edge Function `supabase/functions/equipo-acceso` (clave de servicio solo en el servidor). Acciones: `crear`, `restablecer`, `estado`. Dos formas de dar acceso, a elección del dueño: **contraseña temporal** (el usuario queda confirmado y debe cambiarla al entrar) o **correo de invitación**. Desactivar bloquea el inicio de sesión (ban) y la base de datos le quita el acceso a los datos al instante.
 - App: pestaña **Equipo**; pantalla de nueva contraseña (invitación, recuperación o contraseña temporal) y enlace «¿Olvidaste tu contraseña?» en el login.
 - **Correo:** el correo integrado de Supabase es muy limitado (pocos correos por hora y solo a miembros del equipo del proyecto). Para invitaciones reales a cualquier persona configura un SMTP propio (Authentication → Emails → SMTP, p. ej. Resend o Brevo). Mientras tanto usa contraseña temporal.
-- Los roles siguen siendo Administrador y Cajero. Bodega, Contabilidad y roles con permisos propios llegan en una etapa posterior.
+- Los roles con permisos propios están en la sección 17.
 
+## 17 · Roles con permisos
+- Catálogo cerrado `permisos_catalogo` (vender, fiados, inventario, compras, reportes, panel, autoservicio, todas_sedes) y tabla `roles_permisos`. `app.tiene_permiso(clave)` es verdadero para el rol administrador o si el rol de la persona tiene ese permiso. **Se exige en la base de datos** (funciones y políticas), no solo en la pantalla.
+- Qué exige cada función: caja (abrir/cerrar, vender, gasto, devolución, resumen) → `vender`; crear cliente, abonos, estado de cuenta → `fiados`; ajustar stock, crear producto, importar → `inventario`; sugerencias → `compras`; reporte del contador → `reportes`; `panel_multisede` → `panel`; funciones del autoservicio → `autoservicio`. `todas_sedes` decide si la persona ve todas las sedes (y todas las sesiones de caja) o solo la suya.
+- Gestionar **equipo y roles** sigue siendo exclusivo del administrador (no es un permiso delegable). El rol administrador no se puede editar ni eliminar; un rol con personas no se puede eliminar.
+- Datos iniciales: los roles no administradores existentes conservan lo que hacían (vender, fiados, reportes de su sede) y se crean **Bodega** (inventario, compras) y **Contabilidad** (reportes, fiados, panel, todas las sedes).
+- Funciones: `roles_listar`, `roles_guardar(id, nombre, descripcion, permisos[])`, `roles_eliminar`; `perfil_actual` devuelve `permisos`. En la app: Equipo → **Roles** (casillas) y menú según permisos.
+- Pruebas: `tests/80_pruebas_roles.sql`.

@@ -115,25 +115,27 @@ function login(){
   $('#pw').addEventListener('keydown',e=>{if(e.key==='Enter')go()});
 }
 
+const perm=p=>!!perfil&&(adm||(perfil.permisos||[]).includes(p)),multi=()=>perm('todas_sedes');
 async function boot(){
   const p=await call('perfil_actual');
   if(!p.data){app.innerHTML='<div class="card"><h2>Acceso no disponible</h2><p>Tu cuenta no está activa o no está vinculada a una persona del equipo. Habla con el administrador de la tienda.</p><button class="g" id="lo">Salir</button></div>';$('#lo').onclick=logout;return}
-  perfil=p.data;adm=!!perfil.es_administrador;tab=adm?'panel':'vender';await refresh();
+  perfil=p.data;adm=!!perfil.es_administrador;tab=inicial();await refresh();
 }
 async function logout(){await db.auth.signOut();cart.clear();devSel=null;repR=null;cartera=[];carteraOk=false;metodoSel='Efectivo';cliSel='';facPer='hoy';facSuc='';facQ='';facMet='';facSin=false;autoSub='verificar';autoCnt=0;sugUrg=0;caja=null;perfil=null;login()}
 async function refresh(){
-  caja=(await call('resumen_caja')).data;
+  caja=perm('vender')?(await call('resumen_caja')).data:null;
   if(caja){const {data,error}=await db.from('v_productos_pos').select('*').order('nombre');if(error)toast(error.message,true);prods=data||[]}
-  if(adm){const {count}=await db.from('v_inventario_admin').select('id_inventario',{count:'exact',head:true}).eq('en_alerta',true);invAlertas=count||0;
-    const [ap,ac]=await Promise.all([db.from('pagos_autoservicio').select('id_pago',{count:'exact',head:true}).eq('verificacion','Por verificar'),
-      db.from('clientes_autoservicio').select('id_cliente',{count:'exact',head:true}).eq('estado','Pendiente')]);autoCnt=(ap.count||0)+(ac.count||0);
-    const sg=await db.rpc('sugerencias_compra',{p_entrega:sugEnt,p_cobertura:sugCob});sugUrg=sg.error?0:((sg.data&&sg.data.items)||[]).filter(x=>x.urgencia==='Urgente').length}
+  invAlertas=0;autoCnt=0;sugUrg=0;
+  if(perm('inventario')){const {count}=await db.from('v_inventario_admin').select('id_inventario',{count:'exact',head:true}).eq('en_alerta',true);invAlertas=count||0}
+  if(perm('autoservicio')){const [ap,ac]=await Promise.all([db.from('pagos_autoservicio').select('id_pago',{count:'exact',head:true}).eq('verificacion','Por verificar'),
+      db.from('clientes_autoservicio').select('id_cliente',{count:'exact',head:true}).eq('estado','Pendiente')]);autoCnt=(ap.count||0)+(ac.count||0)}
+  if(perm('compras')){const sg=await db.rpc('sugerencias_compra',{p_entrega:sugEnt,p_cobertura:sugCob});sugUrg=sg.error?0:((sg.data&&sg.data.items)||[]).filter(x=>x.urgencia==='Urgente').length}
   render();
 }
 
 function head(){
   return `<div class="hd"><img class="logo" src="assets/logo.png" alt="Surtify"><span class="sp"></span><button class="g s" id="ins" hidden>Instalar app</button><button class="g s" id="lo">Salir</button></div>
-  <div class="mu who">${esc(perfil.nombre_comercial)} · ${esc(perfil.nombre_sucursal)} · ${esc(perfil.nombre)} · ${adm?'Modo ERP multisede':'Caja simple'}</div>`;
+  <div class="mu who">${esc(perfil.nombre_comercial)} · ${esc(perfil.nombre_sucursal)} · ${esc(perfil.nombre)} · ${adm?'Modo ERP multisede':esc(perfil.rol||'')}</div>`;
 }
 function setBadge(){const b=app.querySelector('[data-t="inv"]');if(b)b.innerHTML='Inventario'+(invAlertas?` <span class="badge">${invAlertas}</span>`:'')}
 function openCard(){
@@ -145,16 +147,25 @@ function bindOpen(){
 }
 
 const SECC_ADM=[['hoy','🏠','Hoy',['panel']],['caja','🧾','Caja',['vender','devolver','gasto','cerrar']],['prod','📦','Productos',['inv','compras']],
-  ['cli','👥','Clientes',['fiados','auto']],['ventas','📊','Ventas',['facturas','reporte']],['equipo','⚙️','Equipo',['equipo']]];
-const SECC_CAJ=[['vender','🛒','Vender',['vender']],['caja','🧾','Caja',['devolver','gasto','cerrar']],['fiados','👥','Fiados',['fiados']],['ventas','📊','Ventas',['facturas','reporte']]];
-const NOMBRE_TAB=a=>({panel:'Resumen',inv:'Inventario',compras:'Compras',vender:'Vender',devolver:'Devolver',gasto:'Gasto',cerrar:'Cerrar caja',fiados:'Fiados',auto:'Autoservicio',facturas:a?'Facturas':'Mis ventas',reporte:'Reporte',equipo:'Personas'});
+  ['cli','👥','Clientes',['fiados','auto']],['ventas','📊','Ventas',['facturas','reporte']],['equipo','⚙️','Equipo',['equipo','roles']]];
+const SECC_CAJ=[['hoy','🏠','Hoy',['panel']],['vender','🛒','Vender',['vender']],['caja','🧾','Caja',['devolver','gasto','cerrar']],['prod','📦','Productos',['inv','compras']],
+  ['fiados','👥','Clientes',['fiados','auto']],['ventas','📊','Ventas',['facturas','reporte']]];
+/* Permiso que exige cada pestaña; Equipo y Roles son solo del administrador */
+const TAB_PERM={panel:'panel',vender:'vender',devolver:'vender',gasto:'vender',cerrar:'vender',inv:'inventario',compras:'compras',fiados:'fiados',auto:'autoservicio',facturas:'reportes',reporte:'reportes'};
+const tabOk=t=>t==='equipo'||t==='roles'?adm:perm(TAB_PERM[t]);
+const secciones=()=>(adm?SECC_ADM:SECC_CAJ).map(x=>[x[0],x[1],x[2],x[3].filter(tabOk)]).filter(x=>x[3].length);
+const inicial=()=>(secciones()[0]||[0,0,0,['vacio']])[3][0];
+const NOMBRE_TAB=a=>({panel:'Resumen',inv:'Inventario',compras:'Compras',vender:'Vender',devolver:'Devolver',gasto:'Gasto',cerrar:'Cerrar caja',fiados:'Fiados',auto:'Autoservicio',facturas:multi()?'Facturas':'Mis ventas',reporte:'Reporte',equipo:'Personas',roles:'Roles'});
 const badgeTab=t=>t==='inv'?invAlertas:t==='compras'?sugUrg:t==='auto'?autoCnt:0;
 const bdg=n=>n?` <span class="badge">${n}</span>`:'';
 const ultimoTab={};
 function render(){
   const h=head();
-  if(!adm&&!caja){app.innerHTML=h+openCard();$('#lo').onclick=logout;btnInstalar();bindOpen();return}
-  const SEC=adm?SECC_ADM:SECC_CAJ,NT=NOMBRE_TAB(adm),cur=SEC.find(x=>x[3].includes(tab))||SEC[0];ultimoTab[cur[0]]=tab;
+  if(!adm&&perm('vender')&&!caja){app.innerHTML=h+openCard();$('#lo').onclick=logout;btnInstalar();bindOpen();return}
+  const SEC=secciones();
+  if(!SEC.length){app.innerHTML=h+'<div class="card"><h2>Sin permisos</h2><p class="mu">Tu rol no tiene funciones activas todavía. Pídele al administrador que las active en Equipo → Roles.</p></div>';$('#lo').onclick=logout;btnInstalar();return}
+  if(!SEC.some(x=>x[3].includes(tab)))tab=SEC[0][3][0];
+  const NT=NOMBRE_TAB(adm),cur=SEC.find(x=>x[3].includes(tab));ultimoTab[cur[0]]=tab;
   const sub=cur[3].length>1?`<div class="tabs">${cur[3].map(t=>`<button data-t="${t}" class="${tab===t?'on':''}">${NT[t]}${bdg(badgeTab(t))}</button>`).join('')}</div>`:'';
   const nav=`<nav class="nav">${SEC.map(x=>`<button data-s="${x[0]}" class="${cur[0]===x[0]?'on':''}" aria-label="${x[2]}"><span>${x[1]}</span><small>${x[2]}</small>${bdg(x[3].reduce((n,t)=>n+badgeTab(t),0))}</button>`).join('')}</nav>`;
   const deCaja=['vender','devolver','gasto','cerrar'].includes(tab);
@@ -166,7 +177,7 @@ function render(){
   app.querySelectorAll('[data-t]').forEach(b=>{b.onclick=()=>{tab=b.dataset.t;render()}});
   app.querySelectorAll('[data-s]').forEach(b=>{b.onclick=()=>{const x=SEC.find(y=>y[0]===b.dataset.s);tab=ultimoTab[x[0]]&&x[3].includes(ultimoTab[x[0]])?ultimoTab[x[0]]:x[3][0];render();window.scrollTo(0,0)}});
   if(deCaja&&!caja){$('#body').innerHTML=openCard();bindOpen();return}
-  ({panel:vPanel,inv:vInv,compras:vCompras,vender:vVender,facturas:vFacturas,fiados:vFiados,auto:vAuto,equipo:vEquipo,devolver:vDevolver,gasto:vGasto,reporte:vReporte,cerrar:vCerrar})[tab]();
+  ({panel:vPanel,inv:vInv,compras:vCompras,vender:vVender,facturas:vFacturas,fiados:vFiados,auto:vAuto,equipo:vEquipo,roles:vRoles,devolver:vDevolver,gasto:vGasto,reporte:vReporte,cerrar:vCerrar})[tab]();
 }
 
 /* ---------- Vender ---------- */
@@ -292,23 +303,23 @@ function waFactura(x,f,tel){ // comprobante de venta para enviar al cliente por 
 
 /* ---------- Facturas (cajero: Mis ventas · administrador: todas las sedes) ---------- */
 async function vFacturas(){
-  if(adm&&!sucs.length){const {data}=await db.from('sucursales').select('id_sucursal,nombre_sucursal').order('id_sucursal');sucs=data||[]}
-  $('#body').innerHTML=`<div class="card"><h2>${adm?'Facturas':'Mis ventas'}</h2>
+  if(multi()&&!sucs.length){const {data}=await db.from('sucursales').select('id_sucursal,nombre_sucursal').order('id_sucursal');sucs=data||[]}
+  $('#body').innerHTML=`<div class="card"><h2>${multi()?'Facturas':'Mis ventas'}</h2>
    <div class="tabs" style="flex-wrap:wrap">${[['hoy','Hoy'],['ayer','Ayer'],['mes','Este mes'],['mesant','Mes anterior']].map(p=>`<button data-p="${p[0]}" class="${facPer===p[0]?'on':''}">${p[1]}</button>`).join('')}</div>
-   ${adm?`<select id="fs"><option value="">Todas las sedes</option>${sucs.map(x=>`<option value="${x.id_sucursal}" ${String(x.id_sucursal)===facSuc?'selected':''}>${esc(x.nombre_sucursal)}</option>`).join('')}</select>`:''}
+   ${multi()?`<select id="fs"><option value="">Todas las sedes</option>${sucs.map(x=>`<option value="${x.id_sucursal}" ${String(x.id_sucursal)===facSuc?'selected':''}>${esc(x.nombre_sucursal)}</option>`).join('')}</select>`:''}
    <select id="fm"><option value="">Todos los medios de pago</option>${['Efectivo','Nequi','Daviplata','Bre-B','PSE','Tarjeta','Fiado'].map(m=>`<option ${m===facMet?'selected':''}>${m}</option>`).join('')}</select>
    <label class="mu" style="display:flex;gap:6px;align-items:center;margin:4px 0"><input type="checkbox" id="fsin" ${facSin?'checked':''} style="width:auto;margin:0"> Solo pagos digitales sin comprobante</label>
-   <input id="fq" placeholder="Buscar por número, cliente${adm?' o cajero':''}" value="${esc(facQ)}">
+   <input id="fq" placeholder="Buscar por número, cliente${multi()?' o cajero':''}" value="${esc(facQ)}">
    <div id="fb"><span class="mu">Cargando…</span></div></div>`;
   $('#body').querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{facPer=b.dataset.p;vFacturas()});
-  if(adm)$('#fs').onchange=e=>{facSuc=e.target.value;vFacturas()};
+  if(multi())$('#fs').onchange=e=>{facSuc=e.target.value;vFacturas()};
   $('#fm').onchange=e=>{facMet=e.target.value;vFacturas()};
   $('#fsin').onchange=e=>{facSin=e.target.checked;vFacturas()};
   const [d,h]=((per)=>{const keep=repPer;repPer=per;const r=repRango();repPer=keep;return r})(facPer);
   const ini=new Date(d+'T00:00:00-05:00').toISOString(),fin=new Date(new Date(h+'T00:00:00-05:00').getTime()+864e5).toISOString();
   let qy=db.from('v_facturas_recientes').select('*').gte('fecha_emision',ini).lt('fecha_emision',fin).order('id_factura',{ascending:false}).limit(500);
-  if(!adm)qy=qy.eq('id_empleado',perfil.id_empleado);
-  if(adm&&facSuc)qy=qy.eq('id_sucursal',Number(facSuc));
+  if(!multi())qy=qy.eq('id_empleado',perfil.id_empleado);
+  if(multi()&&facSuc)qy=qy.eq('id_sucursal',Number(facSuc));
   if(facMet)qy=qy.eq('metodo_pago',facMet);
   const {data,error}=await qy;if(error){toast(error.message,true);return}
   const draw=()=>{
@@ -316,10 +327,10 @@ async function vFacturas(){
     const L=(data||[]).filter(f=>(!facSin||(digital(f.metodo_pago)&&!f.n_comprobantes&&!f.ref_pasarela))&&(!t||[f.numero_factura,f.cliente,f.cajero].some(x=>String(x||'').toLowerCase().includes(t))));
     const tot=L.reduce((a,f)=>a+Number(f.total_facturado),0),dev=L.reduce((a,f)=>a+Number(f.devuelto),0);
     $('#fb').innerHTML=(L.length?`<div class="line"><span class="sp"><b>${pl(L.length,'factura')}</b><div class="mu">${L.length>=500?'Se muestran las 500 más recientes. ':''}${dev>0?'Devuelto '+cop(dev):'Sin devoluciones'}</div></span><b>${cop(tot-dev)}</b></div>`:'')+
-     (L.length?L.map(f=>`<button class="g" data-f="${f.id_factura}" style="width:100%;text-align:left;margin-bottom:6px"><b>${esc(f.numero_factura)}</b> · ${cop(f.total_facturado)} · ${esc(f.metodo_pago)}${f.cliente?' · '+esc(f.cliente):''}<br><span class="mu">${hora(f.fecha_emision)}${adm?' · '+esc(f.sucursal)+' · '+esc(f.cajero||'—'):''} · ${f.unidades} ${Number(f.unidades)===1?'unidad':'unidades'}${Number(f.devuelto)>0?' · devuelto '+cop(f.devuelto):''}${f.n_comprobantes>0?' · 📎 '+f.n_comprobantes:f.ref_pasarela?(f.verificacion==='Por verificar'?' · <b class="wa">⏳ por verificar</b>':f.verificacion==='Dudoso'?' · <b class="er">❗ dudoso</b>':f.verificacion==='Verificado'?' · ✅ verificado':' · 🔗 '+esc(f.ref_pasarela)):digital(f.metodo_pago)?' · <b class="wa">⚠ sin comprobante</b>':''}</span></button>`).join(''):'<span class="mu">No hay facturas en este periodo.</span>');
+     (L.length?L.map(f=>`<button class="g" data-f="${f.id_factura}" style="width:100%;text-align:left;margin-bottom:6px"><b>${esc(f.numero_factura)}</b> · ${cop(f.total_facturado)} · ${esc(f.metodo_pago)}${f.cliente?' · '+esc(f.cliente):''}<br><span class="mu">${hora(f.fecha_emision)}${multi()?' · '+esc(f.sucursal)+' · '+esc(f.cajero||'—'):''} · ${f.unidades} ${Number(f.unidades)===1?'unidad':'unidades'}${Number(f.devuelto)>0?' · devuelto '+cop(f.devuelto):''}${f.n_comprobantes>0?' · 📎 '+f.n_comprobantes:f.ref_pasarela?(f.verificacion==='Por verificar'?' · <b class="wa">⏳ por verificar</b>':f.verificacion==='Dudoso'?' · <b class="er">❗ dudoso</b>':f.verificacion==='Verificado'?' · ✅ verificado':' · 🔗 '+esc(f.ref_pasarela)):digital(f.metodo_pago)?' · <b class="wa">⚠ sin comprobante</b>':''}</span></button>`).join(''):'<span class="mu">No hay facturas en este periodo.</span>');
     $('#fb').querySelectorAll('[data-f]').forEach(b=>b.onclick=async()=>{
       const f=L.find(x=>String(x.id_factura)===b.dataset.f);const r=await call('devolucion_disponible',{p_id_factura:f.id_factura});if(!r.data)return;
-      const x=r.data;const m=modal(`<h2>${esc(x.numero_factura)}</h2><p class="mu">${hora(x.fecha_emision)} · ${esc(x.metodo_pago)}${f.cliente?' · '+esc(f.cliente):''}${adm?' · '+esc(f.sucursal)+' · '+esc(f.cajero||'—'):''}</p>`+
+      const x=r.data;const m=modal(`<h2>${esc(x.numero_factura)}</h2><p class="mu">${hora(x.fecha_emision)} · ${esc(x.metodo_pago)}${f.cliente?' · '+esc(f.cliente):''}${multi()?' · '+esc(f.sucursal)+' · '+esc(f.cajero||'—'):''}</p>`+
        x.lineas.map(l=>`<div class="line"><span class="sp">${esc(l.nombre)}<div class="mu">${l.vendida} × ${cop(l.precio)}${l.devuelta?' · devueltas '+l.devuelta:''}</div></span>${cop(l.vendida*l.precio)}</div>`).join('')+
        `<div class="line"><span class="sp"><b>Total</b></span><b>${cop(x.total)}</b></div>${Number(f.devuelto)>0?`<div class="line"><span class="sp">Devuelto</span>${cop(f.devuelto)}</div>`:''}
         ${f.ref_pasarela?`<div class="line"><span class="sp">${f.verificacion&&f.verificacion!=='No aplica'?'Referencia Bre-B · '+esc(f.verificacion):'Pasarela de pago'}</span><b>${esc(f.ref_pasarela)}</b></div>`:''}${(digital(f.metodo_pago)&&!f.ref_pasarela)||f.n_comprobantes>0?`<div class="line"><span class="sp">Comprobantes</span><b>${f.n_comprobantes>0?'📎 '+f.n_comprobantes:'<span class="wa">⚠ ninguno</span>'}</b></div>${f.n_comprobantes>0?'<button class="g" id="fv" style="width:100%;margin-top:6px">Ver comprobantes</button>':''}<div id="adj"></div>`:''}
@@ -413,13 +424,50 @@ async function eqInvocar(body){
   return data;
 }
 const EQ_TXT={agregado:(a,p)=>`agregó a ${p}`,desactivado:(a,p)=>`desactivó a ${p}`,reactivado:(a,p)=>`reactivó a ${p}`,rol:(a,p,d)=>`cambió el rol de ${p} a ${d}`,
-  sede:(a,p,d)=>`movió a ${p} a ${d}`,acceso_creado:(a,p)=>`entregó acceso a ${p}`,invitacion:(a,p)=>`envió invitación a ${p}`,clave_restablecida:(a,p)=>`restableció la contraseña de ${p}`};
+  sede:(a,p,d)=>`movió a ${p} a ${d}`,acceso_creado:(a,p)=>`entregó acceso a ${p}`,invitacion:(a,p)=>`envió invitación a ${p}`,clave_restablecida:(a,p)=>`restableció la contraseña de ${p}`,
+  rol_creado:(a,p,d)=>`creó el rol ${d}`,rol_editado:(a,p,d)=>`cambió los permisos del rol ${d}`,rol_eliminado:(a,p,d)=>`eliminó el rol ${d}`};
+/* ---------- Roles y permisos (casillas) ---------- */
+let rolData=null;
+async function vRoles(){
+  $('#body').innerHTML='<div class="card"><span class="mu">Cargando…</span></div>';
+  const r=await call('roles_listar');if(!r.data)return;rolData=r.data;
+  const nom=c=>(rolData.catalogo.find(x=>x.clave===c)||{}).nombre||c;
+  $('#body').innerHTML=`<div class="card"><div class="row"><h2 class="sp" style="margin:0">Roles</h2><button class="s" id="rln">+ Nuevo rol</button></div>
+    <p class="mu">Cada rol es un conjunto de permisos. Marca lo que esa persona puede hacer y asígnale el rol en Personas. Solo el administrador puede gestionar el equipo y los roles.</p></div>`+
+    rolData.roles.map(x=>`<div class="card"><div class="row"><b class="sp">${esc(x.nombre_rol)}</b><span class="mu">${x.personas} ${x.personas===1?'persona':'personas'}</span></div>
+      ${x.descripcion?`<div class="mu">${esc(x.descripcion)}</div>`:''}
+      <div style="margin:6px 0">${x.es_administrador?'<span class="badge" style="background:var(--ok,#1a7f4b)">Todo el acceso</span>':(x.permisos.length?x.permisos.map(c=>`<span class="badge" style="margin:2px 4px 2px 0">${esc(nom(c))}</span>`).join(''):'<span class="mu">Sin permisos todavía</span>')}</div>
+      ${x.es_administrador?'':`<div class="row"><button class="g s" data-rle="${x.id_role}">Editar permisos</button><button class="g s" data-rlx="${x.id_role}">Eliminar</button></div>`}</div>`).join('');
+  $('#rln').onclick=()=>rolEditar(null);
+  $('#body').querySelectorAll('[data-rle]').forEach(b=>b.onclick=()=>rolEditar(rolData.roles.find(x=>x.id_role===Number(b.dataset.rle))));
+  $('#body').querySelectorAll('[data-rlx]').forEach(b=>b.onclick=()=>{
+    const x=rolData.roles.find(y=>y.id_role===Number(b.dataset.rlx));
+    if(x.personas){toast('Hay personas con este rol. Cámbiales el rol primero',true);return}
+    const m=modal(`<h2>¿Eliminar el rol ${esc(x.nombre_rol)}?</h2><p class="mu">No se puede deshacer.</p><div class="row"><button class="g sp" id="rn">Cancelar</button><button class="sp" id="rs">Eliminar</button></div>`);
+    m.querySelector('#rn').onclick=()=>m.remove();
+    m.querySelector('#rs').onclick=async()=>{if(busy)return;const d=await call('roles_eliminar',{p_id_role:x.id_role});if(!d.error){m.remove();toast('Rol eliminado');vRoles()}};
+  });
+}
+function rolEditar(x){
+  const C=rolData.catalogo,grupos=[...new Set(C.map(c=>c.grupo))],tiene=new Set(x?x.permisos:[]);
+  const m=modal(`<h2>${x?'Editar rol':'Nuevo rol'}</h2>
+    <label>Nombre<input id="rnm" maxlength="40" autocomplete="off" value="${x?esc(x.nombre_rol):''}" placeholder="Ej: Supervisor"></label>
+    <label>Descripción (opcional)<input id="rds" maxlength="160" autocomplete="off" value="${x&&x.descripcion?esc(x.descripcion):''}"></label>
+    <div class="mu" style="margin-top:8px">¿Qué puede hacer?</div>
+    ${grupos.map(g=>`<div style="margin:8px 0 2px"><b>${esc(g)}</b></div>`+C.filter(c=>c.grupo===g).map(c=>`<label style="display:flex;gap:8px;align-items:flex-start;margin:4px 0"><input type="checkbox" data-pc="${c.clave}" ${tiene.has(c.clave)?'checked':''} style="margin-top:4px"><span>${esc(c.nombre)}<div class="mu">${esc(c.descripcion)}</div></span></label>`).join('')).join('')}
+    <div class="row" style="margin-top:10px"><button class="g sp" id="rc">Cancelar</button><button class="sp" id="rg">Guardar</button></div>`);
+  m.querySelector('#rc').onclick=()=>m.remove();
+  m.querySelector('#rg').onclick=async()=>{if(busy)return;const nombre=m.querySelector('#rnm').value.trim();if(nombre.length<2){toast('Escribe el nombre del rol',true);return}
+    const p=[...m.querySelectorAll('[data-pc]:checked')].map(i=>i.dataset.pc);
+    const d=await call('roles_guardar',{p_id_role:x?x.id_role:null,p_nombre:nombre,p_descripcion:m.querySelector('#rds').value.trim(),p_permisos:p});
+    if(!d.error){m.remove();toast('Rol guardado');vRoles()}};
+}
 async function vEquipo(){
   $('#body').innerHTML='<div class="card"><span class="mu">Cargando…</span></div>';
   const r=await call('equipo_listar');if(!r.data)return;eqData=r.data;
   const E=eqData,est=x=>!x.activo?'<b class="er">Desactivado</b>':!x.tiene_acceso?'<b class="wa">Invitación pendiente</b>':'<b class="ok">Activo</b>';
   $('#body').innerHTML=`<div class="card"><div class="row"><h2 class="sp" style="margin:0">Equipo</h2><button class="s" id="eqn">+ Agregar persona</button></div>
-    <p class="mu">Aquí das y quitas accesos sin tocar la base de datos. Administrador: ve y hace todo. Cajero: vende y maneja la caja de su sede.</p></div>
+    <p class="mu">Aquí das y quitas accesos sin tocar la base de datos. Lo que cada persona puede hacer lo defines en la pestaña <b>Roles</b>.</p></div>
     <div class="card">${E.personas.map(x=>`<div style="padding:10px 0;border-bottom:1px solid var(--bd)"><div><b>${esc(x.nombre)}</b>${x.id_empleado===E.yo?' <span class="mu">(tú)</span>':''} · ${est(x)}</div>
       <div class="mu">${esc(x.email)} · ${esc(x.rol||'Sin rol')} · ${esc(x.sucursal)}</div>
       <div class="row" style="margin-top:6px"><button class="g s" data-eed="${x.id_empleado}">Editar rol/sede</button>
@@ -638,15 +686,15 @@ function repCSV(r){
   return '﻿'+rows.map(a=>a.map(c).join(';')).join('\r\n');
 }
 async function vReporte(){
-  const sedes=adm?sucs:[];
+  const sedes=multi()?sucs:[];
   $('#body').innerHTML=`<div class="card"><h2>Reporte para el contador</h2>
    <div class="tabs" style="flex-wrap:wrap">${[['hoy','Hoy'],['ayer','Ayer'],['mes','Este mes'],['mesant','Mes anterior']].map(p=>`<button data-p="${p[0]}" class="${repPer===p[0]?'on':''}">${p[1]}</button>`).join('')}</div>
-   ${adm?`<select id="rs"><option value="">Todas las sedes</option>${sedes.map(x=>`<option value="${x.id_sucursal}" ${String(x.id_sucursal)===repSuc?'selected':''}>${esc(x.nombre_sucursal)}</option>`).join('')}</select>`:''}
+   ${multi()?`<select id="rs"><option value="">Todas las sedes</option>${sedes.map(x=>`<option value="${x.id_sucursal}" ${String(x.id_sucursal)===repSuc?'selected':''}>${esc(x.nombre_sucursal)}</option>`).join('')}</select>`:''}
    <div id="rb"><span class="mu">Calculando…</span></div></div>`;
   $('#body').querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{repPer=b.dataset.p;vReporte()});
-  if(adm)$('#rs').onchange=e=>{repSuc=e.target.value;vReporte()};
-  if(adm&&!sucs.length){const {data}=await db.from('sucursales').select('id_sucursal,nombre_sucursal').order('id_sucursal');sucs=data||[];if(sucs.length)return vReporte()}
-  const [a,b]=repRango(),r=await call('reporte_contador',{p_desde:a,p_hasta:b,p_id_sucursal:adm&&repSuc?Number(repSuc):null});
+  if(multi())$('#rs').onchange=e=>{repSuc=e.target.value;vReporte()};
+  if(multi()&&!sucs.length){const {data}=await db.from('sucursales').select('id_sucursal,nombre_sucursal').order('id_sucursal');sucs=data||[];if(sucs.length)return vReporte()}
+  const [a,b]=repRango(),r=await call('reporte_contador',{p_desde:a,p_hasta:b,p_id_sucursal:multi()&&repSuc?Number(repSuc):null});
   if(!r.data){$('#rb').innerHTML='';return}
   repR=r.data;const x=repR,f=x.facturas;
   $('#rb').innerHTML=`<p class="mu">${esc(x.desde)}${x.desde===x.hasta?'':' a '+esc(x.hasta)} · ${esc(x.sucursal||'Todas las sedes')}</p>
@@ -691,7 +739,7 @@ function vCerrar(){
    <button id="cc" style="width:100%">Cerrar caja</button></div>`;
   $('#cc').onclick=async()=>{if(!confirm('¿Cerrar la caja? Ya no podrás vender en este turno.'))return;
     const r=await call('cerrar_caja',{p_monto_real:Number($('#real').value)});
-    if(r.data){const d=r.data.diferencia;cart.clear();tab=adm?'panel':'vender';await refresh();
+    if(r.data){const d=r.data.diferencia;cart.clear();tab=inicial();await refresh();
       const m=modal(`<h2>Caja cerrada</h2><p>Esperado ${cop(r.data.monto_cierre_esperado)} · Contado ${cop(r.data.monto_cierre_real)}</p>
         <p class="${d===0?'ok':d<0?'er':'wa'}"><b>${d===0?'Cuadra al centavo':d<0?'Faltante de '+cop(-d):'Sobrante de '+cop(d)}</b></p><button style="width:100%">Entendido</button>`);
       m.querySelector('button').onclick=()=>m.remove()}};
@@ -886,7 +934,7 @@ async function vCompras(){
   const u=items.filter(i=>i.urgencia==='Urgente'),pr=items.filter(i=>i.urgencia!=='Urgente');
   $('#body').innerHTML=`<div class="card"><h2>Sugerencias de compra</h2>
     <p class="mu">Con tus ventas netas de los últimos ${r.dias} días${r.dias_base<r.dias?` (tu historial es de ${r.dias_base} ${r.dias_base===1?'día':'días'}, se usa ese promedio)`:''} calculamos cuánto te dura cada producto y cuándo pedirlo.</p>
-    <div class="row">${adm&&sucs.length>1?`<select id="cs" style="margin:0;flex:1 1 100%"><option value="">Todas las sedes</option>${sucs.map(x=>`<option value="${x.id_sucursal}" ${String(x.id_sucursal)===sugSuc?'selected':''}>${esc(x.nombre_sucursal)}</option>`).join('')}</select>`:''}
+    <div class="row">${multi()&&sucs.length>1?`<select id="cs" style="margin:0;flex:1 1 100%"><option value="">Todas las sedes</option>${sucs.map(x=>`<option value="${x.id_sucursal}" ${String(x.id_sucursal)===sugSuc?'selected':''}>${esc(x.nombre_sucursal)}</option>`).join('')}</select>`:''}
       <select id="ce" style="margin:0;flex:1 1 45%">${[1,3,5,7].map(d=>`<option value="${d}" ${d===sugEnt?'selected':''}>Entrega: ${d} ${d===1?'día':'días'}</option>`).join('')}</select>
       <select id="cc" style="margin:0;flex:1 1 45%">${[7,14,21,30].map(d=>`<option value="${d}" ${d===sugCob?'selected':''}>Cubrir: ${d} días</option>`).join('')}</select></div></div>
   ${items.length?`${u.length?`<div class="card alert"><h2>🔴 Urgente (${u.length})</h2>${u.map(fila).join('')}</div>`:''}

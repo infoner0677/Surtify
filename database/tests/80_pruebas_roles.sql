@@ -1,0 +1,11 @@
+-- Pruebas de roles con permisos (migración 17). Se ejecutan con rollback: terminan en "PRUEBAS_OK ...".
+-- Cubre: cajera conserva lo que hacía; Bodega no vende y sí maneja inventario/compras; Contabilidad ve todas las
+-- sedes pero no edita inventario ni abre caja; rol vacío / sin rol no hace nada y solo ve su sede; el administrador
+-- crea/edita/elimina roles (validaciones: nombre duplicado, permiso inválido, rol administrador intocable, rol con
+-- personas no se elimina); cajeros y anon no gestionan roles. Resultado obtenido (proyecto real):
+--   PRUEBAS_OK admin_perfil;cajera_sigue;cajera_sin_admin;bodega;contabilidad;rol_vacio_y_sin_rol;admin_roles;anon_no;
+-- Patrón: set_config('role','authenticated',true) + set_config('request.jwt.claim.sub', <auth uid>, true); para cambiar
+-- el rol de Diana en la prueba se vuelve a 'postgres', se hace el update y se vuelve a 'authenticated'.
+-- Ver el script completo ejecutado en la sesión de desarrollo; cada bloque "begin perform f(); raise exception 'NOCAYO';
+-- exception when others then if sqlerrm = 'NOCAYO' or sqlstate <> '42501' then raise; end if; end;" exige que la
+-- llamada falle con 42501 (sin permiso).
