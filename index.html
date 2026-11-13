@@ -48,7 +48,15 @@ td.n,th.n{text-align:right;white-space:nowrap}
 .col i{display:block;width:100%;background:var(--pr);border-radius:4px 4px 0 0;min-height:2px}.col small{font-size:.65rem;color:var(--mu);height:14px;white-space:nowrap}
 .meter{height:8px;border-radius:4px;background:var(--bd);margin:3px 0 8px;overflow:hidden}.meter i{display:block;height:100%;background:var(--pr)}
 .chips{display:flex;gap:6px;flex-wrap:wrap}.chips button{padding:6px 12px}
-#toast{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0));background:var(--tx);color:var(--bg);padding:12px;border-radius:10px;display:none;z-index:99}
+/* Navegación por secciones: barra inferior en el celular, barra superior en pantallas grandes */
+.nav{position:fixed;left:0;right:0;bottom:0;z-index:40;display:flex;gap:2px;background:var(--card);border-top:1px solid var(--bd);padding:4px 4px calc(4px + env(safe-area-inset-bottom,0))}
+.nav button{flex:1;min-width:0;position:relative;display:flex;flex-direction:column;align-items:center;background:transparent;color:var(--mu);border:0;border-radius:10px;padding:6px 2px;font-weight:600}
+.nav button span{font-size:1.25rem;line-height:1.2}.nav button small{font-size:.68rem;white-space:nowrap}
+.nav button.on{color:var(--pr);background:var(--bg)}
+.nav .badge{position:absolute;top:0;right:10%;margin:0}
+#app.w,.w#app{padding-bottom:88px}
+@media(min-width:720px){.nav{position:static;border:1px solid var(--bd);border-radius:14px;margin:8px 0 4px;padding:4px}.nav button{flex-direction:row;justify-content:center;gap:6px;padding:10px 6px}.nav button small{font-size:.9rem}.nav .badge{position:static;margin-left:2px}#app.w,.w#app{padding-bottom:12px}}
+#toast{position:fixed;left:12px;right:12px;bottom:calc(84px + env(safe-area-inset-bottom,0));background:var(--tx);color:var(--bg);padding:12px;border-radius:10px;display:none;z-index:99}
 .modal{position:fixed;inset:0;background:#0009;display:flex;align-items:center;justify-content:center;padding:16px;z-index:50}.modal .card{max-width:440px;width:100%;margin:0;max-height:92vh;overflow:auto}
 </style></head>
 <body><div class="w" id="app"></div><div id="toast"></div>
@@ -136,19 +144,27 @@ function bindOpen(){
   $('#ab').onclick=async()=>{const r=await call('abrir_caja',{p_monto_apertura:Number($('#base').value)});if(r.data){toast('Caja abierta');refresh()}};
 }
 
+const SECC_ADM=[['hoy','🏠','Hoy',['panel']],['caja','🧾','Caja',['vender','devolver','gasto','cerrar']],['prod','📦','Productos',['inv','compras']],
+  ['cli','👥','Clientes',['fiados','auto']],['ventas','📊','Ventas',['facturas','reporte']],['equipo','⚙️','Equipo',['equipo']]];
+const SECC_CAJ=[['vender','🛒','Vender',['vender']],['caja','🧾','Caja',['devolver','gasto','cerrar']],['fiados','👥','Fiados',['fiados']],['ventas','📊','Ventas',['facturas','reporte']]];
+const NOMBRE_TAB=a=>({panel:'Resumen',inv:'Inventario',compras:'Compras',vender:'Vender',devolver:'Devolver',gasto:'Gasto',cerrar:'Cerrar caja',fiados:'Fiados',auto:'Autoservicio',facturas:a?'Facturas':'Mis ventas',reporte:'Reporte',equipo:'Personas'});
+const badgeTab=t=>t==='inv'?invAlertas:t==='compras'?sugUrg:t==='auto'?autoCnt:0;
+const bdg=n=>n?` <span class="badge">${n}</span>`:'';
+const ultimoTab={};
 function render(){
   const h=head();
   if(!adm&&!caja){app.innerHTML=h+openCard();$('#lo').onclick=logout;btnInstalar();bindOpen();return}
-  const tabs=adm?[['panel','Panel'],['inv','Inventario'+(invAlertas?` <span class="badge">${invAlertas}</span>`:'')],['compras','Compras'+(sugUrg?` <span class="badge">${sugUrg}</span>`:'')],['vender','Vender'],['facturas','Facturas'],['fiados','Fiados'],['auto','Autoservicio'+(autoCnt?` <span class="badge">${autoCnt}</span>`:'')],['equipo','Equipo'],['devolver','Devolver'],['gasto','Gasto'],['reporte','Reporte'],['cerrar','Cerrar caja']]
-                :[['vender','Vender'],['facturas','Mis ventas'],['fiados','Fiados'],['devolver','Devolver'],['gasto','Gasto'],['reporte','Reporte'],['cerrar','Cerrar caja']];
+  const SEC=adm?SECC_ADM:SECC_CAJ,NT=NOMBRE_TAB(adm),cur=SEC.find(x=>x[3].includes(tab))||SEC[0];ultimoTab[cur[0]]=tab;
+  const sub=cur[3].length>1?`<div class="tabs">${cur[3].map(t=>`<button data-t="${t}" class="${tab===t?'on':''}">${NT[t]}${bdg(badgeTab(t))}</button>`).join('')}</div>`:'';
+  const nav=`<nav class="nav">${SEC.map(x=>`<button data-s="${x[0]}" class="${cur[0]===x[0]?'on':''}" aria-label="${x[2]}"><span>${x[1]}</span><small>${x[2]}</small>${bdg(x[3].reduce((n,t)=>n+badgeTab(t),0))}</button>`).join('')}</nav>`;
   const deCaja=['vender','devolver','gasto','cerrar'].includes(tab);
-  app.innerHTML=h+(caja&&deCaja?`<div class="stats">
+  app.innerHTML=h+nav+(caja&&deCaja?`<div class="stats">
     <div><span class="mu">Efectivo esperado</span><b>${cop(caja.monto_cierre_esperado)}</b></div>
     <div><span class="mu">${caja.num_ventas===1?'Venta':'Ventas'} (${caja.num_ventas})</span><b>${cop(caja.total_ventas)}</b></div>
-    <div><span class="mu">Gastos</span><b>${cop(caja.total_gastos)}</b></div></div>`:'')+
-    `<div class="tabs">${tabs.map(t=>`<button data-t="${t[0]}" class="${tab===t[0]?'on':''}">${t[1]}</button>`).join('')}</div><div id="body"></div>`;
+    <div><span class="mu">Gastos</span><b>${cop(caja.total_gastos)}</b></div></div>`:'')+sub+`<div id="body"></div>`;
   $('#lo').onclick=logout;btnInstalar();
   app.querySelectorAll('[data-t]').forEach(b=>{b.onclick=()=>{tab=b.dataset.t;render()}});
+  app.querySelectorAll('[data-s]').forEach(b=>{b.onclick=()=>{const x=SEC.find(y=>y[0]===b.dataset.s);tab=ultimoTab[x[0]]&&x[3].includes(ultimoTab[x[0]])?ultimoTab[x[0]]:x[3][0];render();window.scrollTo(0,0)}});
   if(deCaja&&!caja){$('#body').innerHTML=openCard();bindOpen();return}
   ({panel:vPanel,inv:vInv,compras:vCompras,vender:vVender,facturas:vFacturas,fiados:vFiados,auto:vAuto,equipo:vEquipo,devolver:vDevolver,gasto:vGasto,reporte:vReporte,cerrar:vCerrar})[tab]();
 }
@@ -908,6 +924,7 @@ async function vPanel(){
     <div><span class="mu">Devoluciones</span><b>${cop(p.devoluciones)}</b></div>
     <div><span class="mu">Por cobrar (fiados)</span><b>${cop(porCobrar)}</b><span class="mu">${pl(deb.length,'cliente')}</span></div></div>
   ${sugUrg?`<div class="card alert"><b>🛒 ${pl(sugUrg,'producto')} para pedir con urgencia</b> <button class="g s" id="gc" style="margin-left:8px">Ver sugerencias</button></div>`:''}
+  ${autoCnt?`<div class="card alert"><b>🧾 Autoservicio: ${autoCnt} por revisar (pagos Bre-B o clientes nuevos)</b> <button class="g s" id="ga" style="margin-left:8px">Revisar</button></div>`:''}
   <div class="sucs">${(p.sucursales||[]).map(s=>`<div class="card"><h2>${esc(s.nombre)}</h2>
     <div class="line"><span class="sp mu">Hoy</span><b>${cop(s.ventas_hoy)}</b><span class="mu">${pl(s.num_ventas_hoy,'venta')}</span></div>
     <div class="line"><span class="sp mu">Últimos ${p.dias} días</span><b>${cop(s.ventas_periodo)}</b><span class="mu">${pl(s.num_ventas_periodo,'venta')}</span></div>
@@ -921,6 +938,7 @@ async function vPanel(){
   app.querySelectorAll('[data-d]').forEach(b=>{b.onclick=()=>{dias=+b.dataset.d;vPanel()}});
   $('#rf').onclick=()=>{vPanel()};
   if($('#gc'))$('#gc').onclick=()=>{tab='compras';render()};
+  if($('#ga'))$('#ga').onclick=()=>{tab='auto';render()};
   app.querySelectorAll('[data-al]').forEach(b=>{b.onclick=()=>{invSuc=b.dataset.al;invSolo=true;invQ='';tab='inv';render()}});
 }
 
