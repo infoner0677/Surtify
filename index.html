@@ -69,7 +69,7 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const hora=x=>x?new Date(x).toLocaleString('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'—';
 const pl=(n,w)=>`${n||0} ${w}${Number(n)===1?'':'s'}`;
 const ddmm=f=>String(f).slice(8,10)+'/'+String(f).slice(5,7);
-let db,perfil,caja,adm=false,prods=[],cart=new Map(),tab='vender',q='',busy=false;
+let avisosPend=0,db,perfil,caja,adm=false,prods=[],cart=new Map(),tab='vender',q='',busy=false;
 let facSin=false,autoSub='verificar',autoCnt=0;
 let cartera=[],carteraOk=false,metodoSel='Efectivo',cliSel='',fiQ='';
 let dias=7,invData=[],cats=[],sucs=[],invAlertas=0,invQ='',invSuc='',invSolo=false;
@@ -125,7 +125,8 @@ async function logout(){await db.auth.signOut();cart.clear();devSel=null;repR=nu
 async function refresh(){
   caja=perm('vender')?(await call('resumen_caja')).data:null;
   if(caja){const {data,error}=await db.from('v_productos_pos').select('*').order('nombre');if(error)toast(error.message,true);prods=data||[]}
-  invAlertas=0;autoCnt=0;sugUrg=0;
+  invAlertas=0;autoCnt=0;sugUrg=0;avisosPend=0;
+  if(perm('fiados')){const pa=await db.rpc('pagos_avisados_listar');avisosPend=pa.error||!pa.data?0:pa.data.pendientes.length}
   if(perm('inventario')){const {count}=await db.from('v_inventario_admin').select('id_inventario',{count:'exact',head:true}).eq('en_alerta',true);invAlertas=count||0}
   if(perm('autoservicio')){const [ap,ac]=await Promise.all([db.from('pagos_autoservicio').select('id_pago',{count:'exact',head:true}).eq('verificacion','Por verificar'),
       db.from('clientes_autoservicio').select('id_cliente',{count:'exact',head:true}).eq('estado','Pendiente')]);autoCnt=(ap.count||0)+(ac.count||0)}
@@ -156,7 +157,7 @@ const tabOk=t=>t==='equipo'||t==='roles'?adm:perm(TAB_PERM[t]);
 const secciones=()=>(adm?SECC_ADM:SECC_CAJ).map(x=>[x[0],x[1],x[2],x[3].filter(tabOk)]).filter(x=>x[3].length);
 const inicial=()=>(secciones()[0]||[0,0,0,['vacio']])[3][0];
 const NOMBRE_TAB=a=>({panel:'Resumen',inv:'Inventario',compras:'Compras',vender:'Vender',devolver:'Devolver',gasto:'Gasto',cerrar:'Cerrar caja',fiados:'Fiados',auto:'Autoservicio',facturas:multi()?'Facturas':'Mis ventas',reporte:'Reporte',equipo:'Personas',roles:'Roles'});
-const badgeTab=t=>t==='inv'?invAlertas:t==='compras'?sugUrg:t==='auto'?autoCnt:0;
+const badgeTab=t=>t==='fiados'?avisosPend:t==='inv'?invAlertas:t==='compras'?sugUrg:t==='auto'?autoCnt:0;
 const bdg=n=>n?` <span class="badge">${n}</span>`:'';
 const ultimoTab={};
 function render(){
@@ -367,9 +368,9 @@ async function vFiados(){
   const deben=cartera.filter(c=>Number(c.saldo)>0),tot=deben.reduce((s,c)=>s+Number(c.saldo),0);
   $('#body').innerHTML=`<div class="card"><div class="row"><h2 style="margin:0">Fiados</h2><span class="sp"></span><button id="nc" class="s">+ Cliente</button></div>
     <div class="kpis" style="margin:10px 0 0"><div><span class="mu">Por cobrar</span><b>${cop(tot)}</b><span class="mu">${pl(deben.length,'cliente')} con deuda</span></div></div></div>
-    <div id="rc"></div>
+    <div id="pa"></div><div id="rc"></div>
     <div class="card"><input id="fq" placeholder="Buscar cliente" value="${esc(fiQ)}" autocomplete="off"><div id="fl"></div></div>`;
-  recTarjeta();
+  avisosTarjeta();recTarjeta();
   const list=()=>{const t=fiQ.trim().toLowerCase(),rows=cartera.filter(c=>!t||c.nombre.toLowerCase().includes(t)||(c.telefono||'').includes(t));
     $('#fl').innerHTML=rows.length?rows.map(c=>`<button class="g" data-c="${c.id_cliente}" style="width:100%;text-align:left;margin-bottom:6px"><b>${esc(c.nombre)}</b><span style="float:right" class="${Number(c.saldo)>0?'er':'ok'}"><b>${cop(c.saldo)}</b></span><br><span class="mu">${esc(c.telefono||'sin celular')}${c.cupo_fiado!=null?' · cupo '+cop(c.cupo_fiado):''}</span></button>`).join(''):'<span class="mu">Aún no hay clientes. Crea el primero con “+ Cliente”.</span>';
     $('#fl').querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>verCliente(Number(b.dataset.c)))};
@@ -402,6 +403,31 @@ async function verCliente(id){
   }
 }
 
+
+/* ---------- Pagos avisados por los clientes (el tendero confirma o rechaza) ---------- */
+async function avisosTarjeta(){
+  const box=$('#pa');if(!box)return;const r=await db.rpc('pagos_avisados_listar');if(!$('#pa')||r.error||!r.data)return;const d=r.data,n=d.pendientes.length;avisosPend=n;
+  const nav=app.querySelector('[data-t="fiados"] .badge,[data-s="fiados"] .badge');
+  if(!n){box.innerHTML='';return}
+  box.innerHTML=`<div class="card alert"><div class="row"><span class="sp"><b>💬 ${pl(n,'cliente')} avis${n===1?'ó':'aron'} que ${n===1?'pagó':'pagaron'}</b><div class="mu">Revisa el pago y confírmalo para registrar el abono.</div></span><button class="s" id="pav">Revisar</button></div></div>`;
+  $('#pav').onclick=()=>avisosLista(d);
+}
+function avisosLista(d){
+  const m=modal(`<h2>Pagos avisados</h2><p class="mu">Verifica en tu Nequi, Daviplata o Bre-B que el pago llegó. Al confirmar se registra el abono en tu caja.</p>
+    <div id="avl">${d.pendientes.map(x=>`<div class="line" data-av="${x.id_aviso}" style="align-items:flex-start"><span class="sp"><b>${esc(x.cliente)}</b><div>${cop(x.monto)} · ${esc(x.metodo)}</div><div class="mu">${x.referencia?'Ref. '+esc(x.referencia)+' · ':''}${hora(x.creado)} · debe ${cop(x.saldo)}</div></span>
+      <span style="display:flex;flex-direction:column;gap:6px"><button class="s" data-ok="${x.id_aviso}">Confirmar</button><button class="g s" data-no="${x.id_aviso}">Rechazar</button></span></div>`).join('')}</div>
+    <button class="g" style="width:100%;margin-top:10px" id="avx">Cerrar</button>`);
+  m.querySelector('#avx').onclick=()=>{m.remove();avisosTarjeta()};
+  const quitar=id=>{const f=m.querySelector(`[data-av="${id}"]`);if(f)f.remove();if(!m.querySelector('[data-av]')){m.remove();refresh()}};
+  m.querySelectorAll('[data-ok]').forEach(b=>b.onclick=async()=>{if(busy)return;const r=await call('pago_aviso_resolver',{p_id_aviso:Number(b.dataset.ok),p_confirmar:true});
+    if(r.data){toast('Abono registrado. Saldo: '+cop(r.data.saldo_nuevo));quitar(b.dataset.ok)}});
+  m.querySelectorAll('[data-no]').forEach(b=>b.onclick=()=>{
+    const m2=modal(`<h2>Rechazar el aviso</h2><p class="mu">Escribe el motivo; el cliente lo verá en su cuenta.</p><input id="avn" maxlength="160" placeholder="Ej: No vemos ese pago en la cuenta" autocomplete="off">
+      <div class="row"><button class="g sp" id="avc">Cancelar</button><button class="sp" id="avr">Rechazar</button></div>`);
+    m2.querySelector('#avc').onclick=()=>m2.remove();
+    m2.querySelector('#avr').onclick=async()=>{const nota=m2.querySelector('#avn').value.trim();if(nota.length<3){toast('Escribe el motivo',true);return}
+      const r=await call('pago_aviso_resolver',{p_id_aviso:Number(b.dataset.no),p_confirmar:false,p_nota:nota});if(!r.error){m2.remove();toast('Aviso rechazado');quitar(b.dataset.no)}}});
+}
 
 /* ---------- Recordatorios de cobro (los decide el dueño; el tendero toca enviar) ---------- */
 async function recTarjeta(){
@@ -513,7 +539,7 @@ async function eqInvocar(body){
 }
 const EQ_TXT={agregado:(a,p)=>`agregó a ${p}`,desactivado:(a,p)=>`desactivó a ${p}`,reactivado:(a,p)=>`reactivó a ${p}`,rol:(a,p,d)=>`cambió el rol de ${p} a ${d}`,
   sede:(a,p,d)=>`movió a ${p} a ${d}`,acceso_creado:(a,p)=>`entregó acceso a ${p}`,invitacion:(a,p)=>`envió invitación a ${p}`,clave_restablecida:(a,p)=>`restableció la contraseña de ${p}`,
-  rol_creado:(a,p,d)=>`creó el rol ${d}`,rol_editado:(a,p,d)=>`cambió los permisos del rol ${d}`,rol_eliminado:(a,p,d)=>`eliminó el rol ${d}`,cliente_acceso:(a,p,d)=>`— ${d}`,recordatorio_config:(a,p,d)=>`— ${d}`,recordatorio_cliente:(a,p,d)=>`— ${d}`};
+  rol_creado:(a,p,d)=>`creó el rol ${d}`,rol_editado:(a,p,d)=>`cambió los permisos del rol ${d}`,rol_eliminado:(a,p,d)=>`eliminó el rol ${d}`,cliente_acceso:(a,p,d)=>`— ${d}`,recordatorio_config:(a,p,d)=>`— ${d}`,recordatorio_cliente:(a,p,d)=>`— ${d}`,pago_aviso:(a,p,d)=>`— ${d}`};
 /* ---------- Roles y permisos (casillas) ---------- */
 let rolData=null;
 async function vRoles(){

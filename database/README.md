@@ -165,3 +165,10 @@ for f in tests/00_shim_supabase_local.sql 01_esquema.sql 02_funciones_y_triggers
 - `app.cuenta_cliente` devuelve `aviso` (verdadero solo si el dueño activó los recordatorios y la deuda superó sus días de inicio y su valor mínimo), `recordatorios_ok` e `id_comercio`. Así **el dueño decide también si "Mi cuenta" avisa**.
 - El cliente autoriza o rechaza los recordatorios desde su cuenta: `cuenta_recordatorios_google(id_comercio, valor)` o `cuenta_recordatorios_enlace(token, pin, valor)`. Es la autorización más sólida (la da el propio cliente) y queda en el registro.
 
+
+## 21 · «Avisar mi pago» (el cliente avisa, el tendero confirma)
+- Desde Mi cuenta (Google o enlace + PIN) el cliente avisa que pagó: valor, método (Bre-B, Nequi, Daviplata, Efectivo, Tarjeta) y referencia opcional. **No cambia su deuda**: queda como aviso *Pendiente* en `pagos_avisados`.
+- Reglas: valor > 0 y no mayor al saldo (contando avisos en revisión), máximo 3 en revisión y 10 por día, referencia única por tienda mientras no sea rechazada.
+- Tendero (permiso `fiados`): `pagos_avisados_listar()` y `pago_aviso_resolver(id, confirmar, monto, nota)`. Confirmar usa `registrar_abono` (a su nombre y en su caja abierta); rechazar exige un motivo que el cliente ve en su cuenta. Todo queda en `equipo_eventos`.
+- `app.cuenta_cliente` devuelve además los últimos 5 `avisos` con su estado.
+- Pruebas: `tests/98_pruebas_pagos_avisados.sql`.

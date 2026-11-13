@@ -1,0 +1,3 @@
+-- Pruebas de 21_pagos_avisados.sql (se ejecutaron con rollback en el proyecto; patrón: do $$ ... raise exception 'PRUEBAS_OK ...' $$).
+-- Resultado: PRUEBAS_OK validaciones;no_cambia_la_deuda;ref_unica;limite_saldo;max_3_pendientes;rechazo_con_motivo;
+--   confirma_y_registra_abono;no_se_confirma_dos_veces;cliente_ve_estados;google_aislado;permisos;anon_no;eventos;
