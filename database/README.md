@@ -182,3 +182,6 @@ for f in tests/00_shim_supabase_local.sql 01_esquema.sql 02_funciones_y_triggers
 - App: Productos → tarjeta **Servicios**; Vender → selector **¿Quién atiende?** (solo aparece si la tienda tiene servicios); Equipo → botón **Comisión**; Ventas → pestaña **Comisiones** (WhatsApp y CSV).
 - Por hacer: marcar comisiones como pagadas (cierre de quincena) y comisión sobre productos con persona asignada desde la pantalla.
 - Pruebas: `tests/99_pruebas_servicios_comisiones.sql`.
+
+## 23 · Pago de comisiones
+Tabla `comisiones_pagos` (solo accesible por funciones) y `detalles_pedido.id_pago_comision`. Funciones: `comisiones_pendientes()`, `comisiones_pagar(persona, hasta, nota)` (solo administrador), `comisiones_pagos_listar()`. Una devolución posterior a un pago queda como ajuste negativo que se descuenta en el siguiente pago. `reporte_comisiones` marca cada línea con `pagada`. Pruebas: `tests/99b_pruebas_pago_comisiones.sql`.

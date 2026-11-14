@@ -546,7 +546,7 @@ async function eqInvocar(body){
     toast(m,true);return null}
   return data;
 }
-const EQ_TXT={agregado:(a,p)=>`agregó a ${p}`,desactivado:(a,p)=>`desactivó a ${p}`,reactivado:(a,p)=>`reactivó a ${p}`,rol:(a,p,d)=>`cambió el rol de ${p} a ${d}`,comision:(a,p,d)=>`cambió la comisión de ${p}: ${d}`,
+const EQ_TXT={agregado:(a,p)=>`agregó a ${p}`,desactivado:(a,p)=>`desactivó a ${p}`,reactivado:(a,p)=>`reactivó a ${p}`,rol:(a,p,d)=>`cambió el rol de ${p} a ${d}`,comision:(a,p,d)=>`cambió la comisión de ${p}: ${d}`,comision_pago:(a,p,d)=>`— ${d} (${p})`,
   sede:(a,p,d)=>`movió a ${p} a ${d}`,acceso_creado:(a,p)=>`entregó acceso a ${p}`,invitacion:(a,p)=>`envió invitación a ${p}`,clave_restablecida:(a,p)=>`restableció la contraseña de ${p}`,
   rol_creado:(a,p,d)=>`creó el rol ${d}`,rol_editado:(a,p,d)=>`cambió los permisos del rol ${d}`,rol_eliminado:(a,p,d)=>`eliminó el rol ${d}`,cliente_acceso:(a,p,d)=>`— ${d}`,recordatorio_config:(a,p,d)=>`— ${d}`,recordatorio_cliente:(a,p,d)=>`— ${d}`,pago_aviso:(a,p,d)=>`— ${d}`};
 /* ---------- Roles y permisos (casillas) ---------- */
@@ -864,14 +864,27 @@ function comTexto(r){
   r.personas.forEach(x=>L.push(`${x.nombre}: ${cop(x.comision_neta)} (vendió ${cop(x.vendido_neto)})`));
   L.push('','_Generado con Surtify_');return L.join('\n');
 }
+async function comPagos(){
+  const [pe,hi]=await Promise.all([call('comisiones_pendientes'),call('comisiones_pagos_listar',{p_id_empleado:null,p_limite:10})]);
+  const c=$('#cp');if(!c)return;if(!pe.data){c.remove();return}
+  const ps=pe.data.personas||[],hs=hi.data||[];
+  c.innerHTML=`<h2>Por pagar</h2>`+(ps.length?ps.map(p=>`<div class="row" style="padding:8px 0;border-bottom:1px solid var(--bd)"><span class="sp"><b>${esc(p.nombre)}</b><div class="mu">desde ${esc(p.desde)} · ${pl(p.lineas,'línea')}${Number(p.pendiente)<0?' · ajuste por devoluciones':''}</div></span><b class="tot">${cop(p.pendiente)}</b>${adm&&Number(p.pendiente)>0?`<button class="g" data-pay="${p.id_empleado}" style="margin-left:8px">Marcar pagado</button>`:''}</div>`).join(''):'<span class="mu">Todo al día: no hay comisiones por pagar.</span>')+
+   (hs.length?`<h3 style="margin-top:12px;font-size:14px">Pagos recientes</h3>`+hs.map(h=>`<div class="line"><span class="sp">${esc(h.persona)}<div class="mu">${hora(h.creado)} · hasta ${esc(h.hasta)}${h.nota?' · '+esc(h.nota):''}</div></span><span>${cop(h.monto)}</span></div>`).join(''):'');
+  c.querySelectorAll('[data-pay]').forEach(b=>b.onclick=()=>{const id=Number(b.dataset.pay),p=ps.find(x=>x.id_empleado===id);
+    modal(`<h2>Marcar como pagado</h2><p>Vas a registrar que le pagaste <b>${cop(p.pendiente)}</b> de comisiones a <b>${esc(p.nombre)}</b> (hasta hoy). No se puede deshacer.</p>
+     <input id="pn" maxlength="200" placeholder="Nota (opcional): quincena, efectivo, transferencia…"><button id="pok" style="width:100%;margin-top:10px">Confirmar pago</button>`);
+    $('#pok').onclick=async()=>{$('#pok').disabled=true;const r=await call('comisiones_pagar',{p_id_empleado:id,p_hasta:pe.data.hasta,p_nota:$('#pn').value||null});
+      document.querySelectorAll('.modal,.mbk,#modal').forEach(m=>m.remove());if(r.data){toast('Pago registrado: '+cop(r.data.monto));}vComis()}});
+}
 async function vComis(){
-  $('#body').innerHTML=`<div class="card"><h2>Comisiones</h2>
+  $('#body').innerHTML=`<div class="card" id="cp"><h2>Por pagar</h2><span class="mu">Calculando…</span></div><div class="card"><h2>Comisiones</h2>
    <div class="tabs" style="flex-wrap:wrap">${[['hoy','Hoy'],['ayer','Ayer'],['mes','Este mes'],['mesant','Mes anterior']].map(p=>`<button data-p="${p[0]}" class="${comPer===p[0]?'on':''}">${p[1]}</button>`).join('')}</div>
    ${adm?`<select id="ce"><option value="">Todas las personas</option>${equipoAt.map(x=>`<option value="${x.id_empleado}" ${String(x.id_empleado)===comEmp?'selected':''}>${esc(x.nombre)}</option>`).join('')}</select>`:''}
    <div id="cb"><span class="mu">Calculando…</span></div></div>`;
   $('#body').querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{comPer=b.dataset.p;vComis()});
   if(adm){if(!equipoAt.length){const e=await db.rpc('equipo_atiende');if(!e.error&&(e.data||[]).length){equipoAt=e.data;return vComis()}}
     $('#ce').onchange=e=>{comEmp=e.target.value;vComis()}}
+  comPagos();
   const [a,b]=repRango(comPer),r=await call('reporte_comisiones',{p_desde:a,p_hasta:b,p_id_empleado:adm&&comEmp?Number(comEmp):null});
   if(!$('#cb'))return;if(!r.data){$('#cb').innerHTML='';return}
   comR=r.data;const x=comR;
@@ -879,7 +892,7 @@ async function vComis(){
    (x.personas.length?x.personas.map(p=>`<div style="padding:10px 0;border-bottom:1px solid var(--bd)"><div class="row"><b class="sp">${esc(p.nombre)}</b><b class="tot">${cop(p.comision_neta)}</b></div>
       <div class="mu">Vendió ${cop(p.vendido_neto)} en ${pl(p.lineas,'servicio')}${Number(p.devuelto)>0?' · devoluciones '+cop(p.devuelto)+' (comisión -'+cop(p.comision_devuelta)+')':''}</div></div>`).join('')
      :'<span class="mu">Sin servicios atendidos en este periodo.</span>')+
-   (x.detalle.length?`<h2 style="margin-top:14px">Detalle</h2>`+x.detalle.slice(0,60).map(d=>`<div class="line"><span class="sp">${esc(d.articulo||'—')} ×${d.cantidad}<div class="mu">${hora(d.fecha)} · ${esc(d.factura)}${adm?' · '+esc(d.persona):''} · ${Number(d.comision_pct)} %</div></span><span>${cop(Number(d.comision)-Number(d.comision_devuelta))}</span></div>`).join('')+(x.detalle.length>60?`<p class="mu">Se muestran los 60 más recientes; el CSV trae todos.</p>`:'')
+   (x.detalle.length?`<h2 style="margin-top:14px">Detalle</h2>`+x.detalle.slice(0,60).map(d=>`<div class="line"><span class="sp">${esc(d.articulo||'—')} ×${d.cantidad}<div class="mu">${hora(d.fecha)} · ${esc(d.factura)}${adm?' · '+esc(d.persona):''} · ${Number(d.comision_pct)} %</div></span><span>${cop(Number(d.comision)-Number(d.comision_devuelta))}${d.pagada?' <span class="mu">✓ pagada</span>':''}</span></div>`).join('')+(x.detalle.length>60?`<p class="mu">Se muestran los 60 más recientes; el CSV trae todos.</p>`:'')
      +`<button class="g" id="cw" style="width:100%;margin-top:10px">Compartir por WhatsApp</button><button class="g" id="cv" style="width:100%;margin-top:6px">Descargar detalle (CSV)</button>`:'');
   if(x.detalle.length){
     $('#cw').onclick=()=>window.open('https://wa.me/?text='+encodeURIComponent(comTexto(x)),'_blank','noopener');
