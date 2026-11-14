@@ -73,6 +73,8 @@ let avisosPend=0,db,perfil,caja,adm=false,prods=[],cart=new Map(),tab='vender',q
 let facSin=false,autoSub='verificar',autoCnt=0;
 let cartera=[],carteraOk=false,metodoSel='Efectivo',cliSel='',fiQ='';
 let dias=7,invData=[],cats=[],sucs=[],invAlertas=0,invQ='',invSuc='',invSolo=false;
+let usaServ=false,equipoAt=[],comPer='hoy',comEmp='',svData=[];
+let atiende=(()=>{try{return localStorage.getItem('surtify_atiende')||''}catch(e){return ''}})();
 
 function toast(m,bad){const t=$('#toast');t.textContent=m;t.style.background=bad?'var(--er)':'var(--tx)';t.style.color=bad?'#fff':'var(--bg)';t.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(()=>{t.style.display='none'},4500)}
 async function call(fn,args){ // llama una función RPC y muestra el error legible del servidor
@@ -121,10 +123,13 @@ async function boot(){
   if(!p.data){app.innerHTML='<div class="card"><h2>Acceso no disponible</h2><p>Tu cuenta no está activa o no está vinculada a una persona del equipo. Habla con el administrador de la tienda.</p><button class="g" id="lo">Salir</button></div>';$('#lo').onclick=logout;return}
   perfil=p.data;adm=!!perfil.es_administrador;tab=inicial();await refresh();
 }
-async function logout(){await db.auth.signOut();cart.clear();devSel=null;repR=null;cartera=[];carteraOk=false;metodoSel='Efectivo';cliSel='';facPer='hoy';facSuc='';facQ='';facMet='';facSin=false;autoSub='verificar';autoCnt=0;sugUrg=0;caja=null;perfil=null;login()}
+async function logout(){await db.auth.signOut();cart.clear();usaServ=false;equipoAt=[];svData=[];comEmp='';devSel=null;repR=null;cartera=[];carteraOk=false;metodoSel='Efectivo';cliSel='';facPer='hoy';facSuc='';facQ='';facMet='';facSin=false;autoSub='verificar';autoCnt=0;sugUrg=0;caja=null;perfil=null;login()}
 async function refresh(){
   caja=perm('vender')?(await call('resumen_caja')).data:null;
   if(caja){const {data,error}=await db.from('v_productos_pos').select('*').order('nombre');if(error)toast(error.message,true);prods=data||[]}
+  usaServ=false;
+  if(perm('vender')||adm){const sv=await db.from('productos').select('id_producto',{count:'exact',head:true}).eq('maneja_inventario',false).eq('activo',true);usaServ=!sv.error&&(sv.count||0)>0}
+  if(caja&&usaServ){const at=await db.rpc('equipo_atiende');equipoAt=at.error?[]:(at.data||[]);if(atiende&&!equipoAt.some(x=>String(x.id_empleado)===atiende))atiende=''}
   invAlertas=0;autoCnt=0;sugUrg=0;avisosPend=0;
   if(perm('fiados')){const pa=await db.rpc('pagos_avisados_listar');avisosPend=pa.error||!pa.data?0:pa.data.pendientes.length}
   if(perm('inventario')){const {count}=await db.from('v_inventario_admin').select('id_inventario',{count:'exact',head:true}).eq('en_alerta',true);invAlertas=count||0}
@@ -148,15 +153,15 @@ function bindOpen(){
 }
 
 const SECC_ADM=[['hoy','🏠','Hoy',['panel']],['caja','🧾','Caja',['vender','devolver','gasto','cerrar']],['prod','📦','Productos',['inv','compras']],
-  ['cli','👥','Clientes',['fiados','auto']],['ventas','📊','Ventas',['facturas','reporte']],['equipo','⚙️','Equipo',['equipo','roles']]];
+  ['cli','👥','Clientes',['fiados','auto']],['ventas','📊','Ventas',['facturas','reporte','comis']],['equipo','⚙️','Equipo',['equipo','roles']]];
 const SECC_CAJ=[['hoy','🏠','Hoy',['panel']],['vender','🛒','Vender',['vender']],['caja','🧾','Caja',['devolver','gasto','cerrar']],['prod','📦','Productos',['inv','compras']],
-  ['fiados','👥','Clientes',['fiados','auto']],['ventas','📊','Ventas',['facturas','reporte']]];
+  ['fiados','👥','Clientes',['fiados','auto']],['ventas','📊','Ventas',['facturas','reporte','comis']]];
 /* Permiso que exige cada pestaña; Equipo y Roles son solo del administrador */
-const TAB_PERM={panel:'panel',vender:'vender',devolver:'vender',gasto:'vender',cerrar:'vender',inv:'inventario',compras:'compras',fiados:'fiados',auto:'autoservicio',facturas:'reportes',reporte:'reportes'};
-const tabOk=t=>t==='equipo'||t==='roles'?adm:perm(TAB_PERM[t]);
+const TAB_PERM={panel:'panel',vender:'vender',devolver:'vender',gasto:'vender',cerrar:'vender',inv:'inventario',compras:'compras',fiados:'fiados',auto:'autoservicio',facturas:'reportes',reporte:'reportes',comis:'vender'};
+const tabOk=t=>t==='equipo'||t==='roles'?adm:t==='comis'?(usaServ&&perm('vender')):perm(TAB_PERM[t]);
 const secciones=()=>(adm?SECC_ADM:SECC_CAJ).map(x=>[x[0],x[1],x[2],x[3].filter(tabOk)]).filter(x=>x[3].length);
 const inicial=()=>(secciones()[0]||[0,0,0,['vacio']])[3][0];
-const NOMBRE_TAB=a=>({panel:'Resumen',inv:'Inventario',compras:'Compras',vender:'Vender',devolver:'Devolver',gasto:'Gasto',cerrar:'Cerrar caja',fiados:'Fiados',auto:'Autoservicio',facturas:multi()?'Facturas':'Mis ventas',reporte:'Reporte',equipo:'Personas',roles:'Roles'});
+const NOMBRE_TAB=a=>({panel:'Resumen',inv:'Inventario',compras:'Compras',vender:'Vender',devolver:'Devolver',gasto:'Gasto',cerrar:'Cerrar caja',fiados:'Fiados',auto:'Autoservicio',facturas:multi()?'Facturas':'Mis ventas',reporte:'Reporte',comis:'Comisiones',equipo:'Personas',roles:'Roles'});
 const badgeTab=t=>t==='fiados'?avisosPend:t==='inv'?invAlertas:t==='compras'?sugUrg:t==='auto'?autoCnt:0;
 const bdg=n=>n?` <span class="badge">${n}</span>`:'';
 const ultimoTab={};
@@ -178,18 +183,22 @@ function render(){
   app.querySelectorAll('[data-t]').forEach(b=>{b.onclick=()=>{tab=b.dataset.t;render()}});
   app.querySelectorAll('[data-s]').forEach(b=>{b.onclick=()=>{const x=SEC.find(y=>y[0]===b.dataset.s);tab=ultimoTab[x[0]]&&x[3].includes(ultimoTab[x[0]])?ultimoTab[x[0]]:x[3][0];render();window.scrollTo(0,0)}});
   if(deCaja&&!caja){$('#body').innerHTML=openCard();bindOpen();return}
-  ({panel:vPanel,inv:vInv,compras:vCompras,vender:vVender,facturas:vFacturas,fiados:vFiados,auto:vAuto,equipo:vEquipo,roles:vRoles,devolver:vDevolver,gasto:vGasto,reporte:vReporte,cerrar:vCerrar})[tab]();
+  ({panel:vPanel,inv:vInv,compras:vCompras,vender:vVender,facturas:vFacturas,fiados:vFiados,auto:vAuto,equipo:vEquipo,roles:vRoles,devolver:vDevolver,gasto:vGasto,reporte:vReporte,comis:vComis,cerrar:vCerrar})[tab]();
 }
 
 /* ---------- Vender ---------- */
-const bajo=p=>p.stock<=(p.stock_minimo??0);
+const esServ=p=>p.maneja_inventario===false;
+const bajo=p=>!esServ(p)&&p.stock<=(p.stock_minimo??0);
+const nomAt=id=>(equipoAt.find(x=>String(x.id_empleado)===String(id))||{}).nombre||'';
 function vVender(){
   const low=prods.filter(bajo);
   $('#body').innerHTML=(low.length?`<div class="card alert"><b>⚠ ${low.length} producto${low.length>1?'s':''} con stock bajo</b>
     <div class="mu">${low.slice(0,6).map(p=>esc(p.nombre)+' ('+p.stock+')').join(' · ')}${low.length>6?' …':''}</div></div>`:'')+
+  (usaServ?`<div class="card"><label style="margin:0">¿Quién atiende? <span class="mu">(para la comisión de los servicios)</span><select id="at" style="margin-bottom:0"><option value="">Nadie · sin comisión</option>${equipoAt.map(x=>`<option value="${x.id_empleado}" ${String(x.id_empleado)===atiende?'selected':''}>${esc(x.nombre)}</option>`).join('')}</select></label></div>`:'')+
   `<div class="card"><div class="row"><input id="q" placeholder="Buscar o escanear código de barras" value="${esc(q)}" autocomplete="off" style="flex:1;min-width:0"><button class="g" id="cam" title="Escanear con la cámara" aria-label="Escanear con la cámara" style="margin:4px 0 8px">📷 Escanear</button></div><div class="grid" id="pl"></div></div>
   <div class="card"><h2>Carrito</h2><div id="cl"></div></div>`;
   $('#cam').onclick=escanear;
+  if($('#at'))$('#at').onchange=e=>{atiende=e.target.value;try{localStorage.setItem('surtify_atiende',atiende)}catch(x){}};
   const input=$('#q');
   input.oninput=()=>{q=input.value;list()};
   input.addEventListener('keydown',e=>{if(e.key!=='Enter')return;
@@ -199,23 +208,23 @@ function vVender(){
 }
 const filtered=()=>{const t=q.trim().toLowerCase();return prods.filter(p=>!t||p.nombre.toLowerCase().includes(t)||(p.codigo_barras||'').includes(t))};
 function list(){
-  $('#pl').innerHTML=filtered().slice(0,40).map(p=>`<button class="p" data-id="${p.id_producto}" ${p.stock<=0?'disabled':''}>${esc(p.nombre)}<small>${cop(p.precio_venta)} · ${p.stock<=0?'<b class="er">agotado</b>':'stock '+p.stock+(bajo(p)?' · <b class="wa">bajo</b>':'')}</small></button>`).join('')||'<span class="mu">Sin resultados</span>';
+  $('#pl').innerHTML=filtered().slice(0,40).map(p=>`<button class="p" data-id="${p.id_producto}" ${!esServ(p)&&p.stock<=0?'disabled':''}>${esc(p.nombre)}<small>${cop(p.precio_venta)} · ${esServ(p)?'servicio':p.stock<=0?'<b class="er">agotado</b>':'stock '+p.stock+(bajo(p)?' · <b class="wa">bajo</b>':'')}</small></button>`).join('')||'<span class="mu">Sin resultados</span>';
   $('#pl').querySelectorAll('.p').forEach(b=>{b.onclick=()=>add(prods.find(p=>p.id_producto==b.dataset.id))});
 }
-function add(p){const x=cart.get(p.id_producto)||{p,qty:0};if(x.qty>=p.stock){toast('No hay más stock de '+p.nombre,true);return}x.qty++;cart.set(p.id_producto,x);cartView()}
+function add(p){const emp=esServ(p)?atiende:'',k=p.id_producto+'|'+emp,x=cart.get(k)||{p,qty:0,emp};if(!esServ(p)&&x.qty>=p.stock){toast('No hay más stock de '+p.nombre,true);return}x.qty++;cart.set(k,x);cartView()}
 const total=()=>[...cart.values()].reduce((s,x)=>s+x.qty*x.p.precio_venta,0);
 function cartView(){
   const el=$('#cl');if(!el)return;
   if(!cart.size){el.innerHTML='<span class="mu">Toca un producto para agregarlo.</span>';return}
-  el.innerHTML=[...cart.values()].map(x=>`<div class="line"><div class="sp">${esc(x.p.nombre)}<div class="mu">${cop(x.p.precio_venta)}</div></div>
-    <button class="g s" data-m="${x.p.id_producto}">−</button><b>${x.qty}</b><button class="g s" data-a="${x.p.id_producto}">+</button><b style="min-width:80px;text-align:right">${cop(x.qty*x.p.precio_venta)}</b></div>`).join('')+
+  el.innerHTML=[...cart.values()].map(x=>`<div class="line"><div class="sp">${esc(x.p.nombre)}<div class="mu">${cop(x.p.precio_venta)}${x.emp?' · atiende '+esc(nomAt(x.emp)):''}</div></div>
+    <button class="g s" data-m="${x.p.id_producto}|${x.emp}">−</button><b>${x.qty}</b><button class="g s" data-a="${x.p.id_producto}|${x.emp}">+</button><b style="min-width:80px;text-align:right">${cop(x.qty*x.p.precio_venta)}</b></div>`).join('')+
   `<div class="row" style="margin-top:10px"><span class="sp mu">Total</span><span class="tot">${cop(total())}</span></div>
    <select id="mp"><option>Efectivo</option><option>Nequi</option><option>Daviplata</option><option>Bre-B</option><option>Tarjeta</option><option>Fiado</option></select>
    <div id="fcli" style="display:none"><div class="row"><select id="fc" class="sp"></select><button class="g s" id="fn">+ Nuevo</button></div><div id="fdeb" class="mu"></div></div>
    <div id="efe"><input id="rec" type="number" inputmode="decimal" placeholder="Efectivo recibido"><div id="cam" class="mu"></div></div>
    <div class="row"><button class="g" id="vac">Vaciar</button><button class="sp" id="cob">Cobrar</button></div>`;
-  el.querySelectorAll('[data-m]').forEach(b=>{b.onclick=()=>{const x=cart.get(+b.dataset.m);x.qty--;if(x.qty<=0)cart.delete(+b.dataset.m);cartView()}});
-  el.querySelectorAll('[data-a]').forEach(b=>{b.onclick=()=>add(cart.get(+b.dataset.a).p)});
+  el.querySelectorAll('[data-m]').forEach(b=>{b.onclick=()=>{const x=cart.get(b.dataset.m);x.qty--;if(x.qty<=0)cart.delete(b.dataset.m);cartView()}});
+  el.querySelectorAll('[data-a]').forEach(b=>{b.onclick=()=>{const x=cart.get(b.dataset.a);if(!esServ(x.p)&&x.qty>=x.p.stock){toast('No hay más stock de '+x.p.nombre,true);return}x.qty++;cartView()}});
   const fillCli=()=>{const sel=$('#fc');sel.innerHTML='<option value="">Elige el cliente</option>'+cartera.map(c=>`<option value="${c.id_cliente}">${esc(c.nombre)}${Number(c.saldo)>0?' · debe '+cop(c.saldo):''}</option>`).join('');sel.value=cliSel;
     const c=cartera.find(x=>String(x.id_cliente)===String(cliSel));$('#fdeb').textContent=c?(c.cupo_fiado!=null?'Cupo '+cop(c.cupo_fiado)+' · ':'')+'debe '+cop(c.saldo):''};
   const sync=()=>{metodoSel=$('#mp').value;$('#efe').style.display=metodoSel==='Efectivo'?'block':'none';$('#fcli').style.display=metodoSel==='Fiado'?'block':'none';
@@ -227,7 +236,7 @@ function cartView(){
   $('#cob').onclick=async e=>{if(busy)return;busy=true;e.target.disabled=true;
     const ef=$('#mp').value==='Efectivo',fi=$('#mp').value==='Fiado';
     if(fi&&!cliSel){toast('Elige el cliente al que le fías',true);busy=false;e.target.disabled=false;return}
-    const r=await call('registrar_venta',{p_items:[...cart.values()].map(x=>({id_producto:x.p.id_producto,cantidad:x.qty})),
+    const r=await call('registrar_venta',{p_items:[...cart.values()].map(x=>({id_producto:x.p.id_producto,cantidad:x.qty,id_empleado:x.emp?Number(x.emp):null})),
       p_metodo_pago:$('#mp').value,p_monto_recibido:ef&&$('#rec').value?Number($('#rec').value):null,p_id_cliente:fi?Number(cliSel):null});
     busy=false;e.target.disabled=false;
     if(r.data){const cn=fi?(cartera.find(x=>String(x.id_cliente)===String(cliSel))||{}).nombre:null;cart.clear();q='';metodoSel='Efectivo';cliSel='';carteraOk=false;await refresh();recibo(r.data,cn)}};
@@ -537,7 +546,7 @@ async function eqInvocar(body){
     toast(m,true);return null}
   return data;
 }
-const EQ_TXT={agregado:(a,p)=>`agregó a ${p}`,desactivado:(a,p)=>`desactivó a ${p}`,reactivado:(a,p)=>`reactivó a ${p}`,rol:(a,p,d)=>`cambió el rol de ${p} a ${d}`,
+const EQ_TXT={agregado:(a,p)=>`agregó a ${p}`,desactivado:(a,p)=>`desactivó a ${p}`,reactivado:(a,p)=>`reactivó a ${p}`,rol:(a,p,d)=>`cambió el rol de ${p} a ${d}`,comision:(a,p,d)=>`cambió la comisión de ${p}: ${d}`,
   sede:(a,p,d)=>`movió a ${p} a ${d}`,acceso_creado:(a,p)=>`entregó acceso a ${p}`,invitacion:(a,p)=>`envió invitación a ${p}`,clave_restablecida:(a,p)=>`restableció la contraseña de ${p}`,
   rol_creado:(a,p,d)=>`creó el rol ${d}`,rol_editado:(a,p,d)=>`cambió los permisos del rol ${d}`,rol_eliminado:(a,p,d)=>`eliminó el rol ${d}`,cliente_acceso:(a,p,d)=>`— ${d}`,recordatorio_config:(a,p,d)=>`— ${d}`,recordatorio_cliente:(a,p,d)=>`— ${d}`,pago_aviso:(a,p,d)=>`— ${d}`};
 /* ---------- Roles y permisos (casillas) ---------- */
@@ -583,14 +592,15 @@ async function vEquipo(){
   $('#body').innerHTML=`<div class="card"><div class="row"><h2 class="sp" style="margin:0">Equipo</h2><button class="s" id="eqn">+ Agregar persona</button></div>
     <p class="mu">Aquí das y quitas accesos sin tocar la base de datos. Lo que cada persona puede hacer lo defines en la pestaña <b>Roles</b>.</p></div>
     <div class="card">${E.personas.map(x=>`<div style="padding:10px 0;border-bottom:1px solid var(--bd)"><div><b>${esc(x.nombre)}</b>${x.id_empleado===E.yo?' <span class="mu">(tú)</span>':''} · ${est(x)}</div>
-      <div class="mu">${esc(x.email)} · ${esc(x.rol||'Sin rol')} · ${esc(x.sucursal)}</div>
-      <div class="row" style="margin-top:6px"><button class="g s" data-eed="${x.id_empleado}">Editar rol/sede</button>
+      <div class="mu">${esc(x.email)} · ${esc(x.rol||'Sin rol')} · ${esc(x.sucursal)}${x.activo&&(usaServ||Number(x.comision_pct)>0)?' · comisión '+Number(x.comision_pct||0)+' %':''}</div>
+      <div class="row" style="margin-top:6px"><button class="g s" data-eed="${x.id_empleado}">Editar rol/sede</button>${x.activo?`<button class="g s" data-eco="${x.id_empleado}">Comisión</button>`:''}
         ${x.activo?`<button class="g s" data-ere="${x.id_empleado}">${x.tiene_acceso?'Restablecer contraseña':'Reenviar acceso'}</button>`:''}
         ${x.id_empleado!==E.yo?(x.activo?`<button class="g s" data-eof="${x.id_empleado}">Desactivar</button>`:`<button class="s" data-eon="${x.id_empleado}">Reactivar</button>`):''}</div></div>`).join('')}</div>
     <div class="card"><h2>Movimientos recientes</h2>${E.eventos.length?E.eventos.map(v=>`<div class="line"><span class="sp"><span class="mu">${hora(v.creado)}</span> · ${esc(v.actor||'—')} ${esc((EQ_TXT[v.accion]||(()=>v.accion))(v.actor,v.persona||'—',v.detalle))}</span></div>`).join(''):'<span class="mu">Aún no hay movimientos.</span>'}</div>`;
   const P=id=>E.personas.find(x=>x.id_empleado===Number(id));
   $('#eqn').onclick=()=>eqAgregar();
   $('#body').querySelectorAll('[data-eed]').forEach(b=>b.onclick=()=>eqEditar(P(b.dataset.eed)));
+  $('#body').querySelectorAll('[data-eco]').forEach(b=>b.onclick=()=>eqComision(P(b.dataset.eco)));
   $('#body').querySelectorAll('[data-ere]').forEach(b=>b.onclick=()=>eqRestablecer(P(b.dataset.ere)));
   $('#body').querySelectorAll('[data-eof]').forEach(b=>b.onclick=()=>eqDesactivar(P(b.dataset.eof)));
   $('#body').querySelectorAll('[data-eon]').forEach(b=>b.onclick=async()=>{const d=await eqInvocar({accion:'estado',id_empleado:Number(b.dataset.eon),activo:true});if(d){toast(d.aviso||'Persona reactivada',!!d.aviso);vEquipo()}});
@@ -656,6 +666,17 @@ function eqEditar(x){
     if(rl===x.id_role&&sd===x.id_sucursal){m.remove();return}
     const r=await call('equipo_actualizar',{p_id_empleado:x.id_empleado,p_id_role:rl!==x.id_role?rl:null,p_id_sucursal:sd!==x.id_sucursal?sd:null});
     if(r.data){m.remove();toast('Cambios guardados');vEquipo()}};
+}
+function eqComision(x){
+  const m=modal(`<h2>Comisión de ${esc(x.nombre)}</h2>
+    <p class="mu">Porcentaje que gana sobre lo que atiende (los servicios que se cobran a su nombre). Cada servicio puede tener su propio porcentaje, que reemplaza este. Lo ya vendido no cambia.</p>
+    <label>Comisión base (%)<input id="cp" type="number" inputmode="decimal" min="0" max="100" step="0.5" value="${Number(x.comision_pct||0)}"></label>
+    <div class="row"><button class="g sp" id="ec">Cancelar</button><button class="sp" id="eg">Guardar</button></div>`);
+  m.querySelector('#ec').onclick=()=>m.remove();
+  m.querySelector('#eg').onclick=async()=>{const v=Number(m.querySelector('#cp').value);
+    if(!(v>=0&&v<=100)){toast('La comisión debe estar entre 0 y 100',true);return}
+    const r=await call('equipo_comision',{p_id_empleado:x.id_empleado,p_pct:v});
+    if(r.data){m.remove();toast('Comisión guardada');vEquipo()}};
 }
 function eqDesactivar(x){
   const m=modal(`<h2>¿Desactivar a ${esc(x.nombre)}?</h2><p>Perderá el acceso de inmediato. Su historial de ventas se conserva y puedes reactivarla cuando quieras.</p>
@@ -770,11 +791,11 @@ let repR=null,repPer='hoy',repSuc='';
 let facPer='hoy',facSuc='',facQ='',facMet='';
 let sugUrg=0,sugEnt=3,sugCob=14,sugSuc='';
 function bogota(d){return new Date(d.getTime()-5*3600e3).toISOString().slice(0,10)}
-function repRango(){
+function repRango(per=repPer){
   const hoy=new Date(),h=bogota(hoy);
-  if(repPer==='hoy')return [h,h];
-  if(repPer==='ayer'){const y=bogota(new Date(hoy.getTime()-864e5));return [y,y]}
-  if(repPer==='mes')return [h.slice(0,8)+'01',h];
+  if(per==='hoy')return [h,h];
+  if(per==='ayer'){const y=bogota(new Date(hoy.getTime()-864e5));return [y,y]}
+  if(per==='mes')return [h.slice(0,8)+'01',h];
   const [a,m]=h.split('-').map(Number),p=new Date(Date.UTC(a,m-2,1)),f=new Date(Date.UTC(a,m-1,0));
   return [p.toISOString().slice(0,10),f.toISOString().slice(0,10)];
 }
@@ -831,6 +852,41 @@ async function vReporte(){
   $('#rv').onclick=()=>{const u=URL.createObjectURL(new Blob([repCSV(x)],{type:'text/csv;charset=utf-8'})),l=document.createElement('a');l.href=u;l.download=`surtify_${x.desde}_${x.hasta}.csv`;l.click();setTimeout(()=>URL.revokeObjectURL(u),2000)};
 }
 
+/* ---------- Comisiones por persona ---------- */
+let comR=null;
+function comCSV(r){
+  const c=v=>'"'+String(v??'').replace(/"/g,'""')+'"',rows=[['Fecha','Factura','Persona','Artículo','Cantidad','Valor','% comisión','Comisión','Comisión devuelta']];
+  r.detalle.forEach(x=>rows.push([x.fecha,x.factura,x.persona,x.articulo,x.cantidad,x.valor,x.comision_pct,x.comision,x.comision_devuelta]));
+  return '\ufeff'+rows.map(a=>a.map(c).join(';')).join('\r\n');
+}
+function comTexto(r){
+  const L=[`*Comisiones – ${r.desde}${r.desde===r.hasta?'':' a '+r.hasta}*`,''];
+  r.personas.forEach(x=>L.push(`${x.nombre}: ${cop(x.comision_neta)} (vendió ${cop(x.vendido_neto)})`));
+  L.push('','_Generado con Surtify_');return L.join('\n');
+}
+async function vComis(){
+  $('#body').innerHTML=`<div class="card"><h2>Comisiones</h2>
+   <div class="tabs" style="flex-wrap:wrap">${[['hoy','Hoy'],['ayer','Ayer'],['mes','Este mes'],['mesant','Mes anterior']].map(p=>`<button data-p="${p[0]}" class="${comPer===p[0]?'on':''}">${p[1]}</button>`).join('')}</div>
+   ${adm?`<select id="ce"><option value="">Todas las personas</option>${equipoAt.map(x=>`<option value="${x.id_empleado}" ${String(x.id_empleado)===comEmp?'selected':''}>${esc(x.nombre)}</option>`).join('')}</select>`:''}
+   <div id="cb"><span class="mu">Calculando…</span></div></div>`;
+  $('#body').querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{comPer=b.dataset.p;vComis()});
+  if(adm){if(!equipoAt.length){const e=await db.rpc('equipo_atiende');if(!e.error&&(e.data||[]).length){equipoAt=e.data;return vComis()}}
+    $('#ce').onchange=e=>{comEmp=e.target.value;vComis()}}
+  const [a,b]=repRango(comPer),r=await call('reporte_comisiones',{p_desde:a,p_hasta:b,p_id_empleado:adm&&comEmp?Number(comEmp):null});
+  if(!$('#cb'))return;if(!r.data){$('#cb').innerHTML='';return}
+  comR=r.data;const x=comR;
+  $('#cb').innerHTML=`<p class="mu">${esc(x.desde)}${x.desde===x.hasta?'':' a '+esc(x.hasta)}${adm?'':' · solo lo tuyo'}</p>`+
+   (x.personas.length?x.personas.map(p=>`<div style="padding:10px 0;border-bottom:1px solid var(--bd)"><div class="row"><b class="sp">${esc(p.nombre)}</b><b class="tot">${cop(p.comision_neta)}</b></div>
+      <div class="mu">Vendió ${cop(p.vendido_neto)} en ${pl(p.lineas,'servicio')}${Number(p.devuelto)>0?' · devoluciones '+cop(p.devuelto)+' (comisión -'+cop(p.comision_devuelta)+')':''}</div></div>`).join('')
+     :'<span class="mu">Sin servicios atendidos en este periodo.</span>')+
+   (x.detalle.length?`<h2 style="margin-top:14px">Detalle</h2>`+x.detalle.slice(0,60).map(d=>`<div class="line"><span class="sp">${esc(d.articulo||'—')} ×${d.cantidad}<div class="mu">${hora(d.fecha)} · ${esc(d.factura)}${adm?' · '+esc(d.persona):''} · ${Number(d.comision_pct)} %</div></span><span>${cop(Number(d.comision)-Number(d.comision_devuelta))}</span></div>`).join('')+(x.detalle.length>60?`<p class="mu">Se muestran los 60 más recientes; el CSV trae todos.</p>`:'')
+     +`<button class="g" id="cw" style="width:100%;margin-top:10px">Compartir por WhatsApp</button><button class="g" id="cv" style="width:100%;margin-top:6px">Descargar detalle (CSV)</button>`:'');
+  if(x.detalle.length){
+    $('#cw').onclick=()=>window.open('https://wa.me/?text='+encodeURIComponent(comTexto(x)),'_blank','noopener');
+    $('#cv').onclick=()=>{const u=URL.createObjectURL(new Blob([comCSV(x)],{type:'text/csv;charset=utf-8'})),l=document.createElement('a');l.href=u;l.download=`surtify_comisiones_${x.desde}_${x.hasta}.csv`;l.click();setTimeout(()=>URL.revokeObjectURL(u),2000)};
+  }
+}
+
 /* ---------- Gasto ---------- */
 function vGasto(){
   $('#body').innerHTML=`<div class="card"><h2>Gasto de caja</h2><p class="mu">Dinero que sale del cajón (almuerzo, servicios, imprevistos). Se resta del efectivo esperado.</p>
@@ -877,7 +933,8 @@ async function vInv(){
     <select id="is" style="width:auto;margin:0"><option value="">Todas las sedes</option>${sucs.map(s=>`<option value="${s.id_sucursal}" ${String(s.id_sucursal)===invSuc?'selected':''}>${esc(s.nombre_sucursal)}</option>`).join('')}</select>
     <label style="margin:0"><input type="checkbox" id="ia" ${invSolo?'checked':''}>Solo alertas</label>
     <button id="np" class="s">+ Producto</button><button id="im" class="s g">⬆ Importar Excel</button><button id="rm" class="s">📷 Recibir mercancía</button></div></div>
-    <div class="card t" id="it"></div>`;
+    <div class="card t" id="it"></div>
+    <div class="card" id="sv"><span class="mu">Cargando servicios…</span></div>`;
   $('#iq').oninput=()=>{invQ=$('#iq').value;invList()};
   $('#is').onchange=()=>{invSuc=$('#is').value;invList()};
   $('#ia').onchange=()=>{invSolo=$('#ia').checked;invList()};
@@ -885,7 +942,7 @@ async function vInv(){
   $('#im').onclick=importarProductos;
   $('#rm').onclick=recibirMercancia;
   $('#iqc').onclick=()=>escanearEn('#iq',cod=>{invQ=cod;invList()});
-  invList();
+  invList();svCargar();
 }
 function invList(){
   const t=invQ.trim().toLowerCase();
@@ -901,6 +958,30 @@ function invList(){
   const byId=id=>invData.find(r=>r.id_inventario==id);
   el.querySelectorAll('[data-e]').forEach(b=>{b.onclick=()=>entrada(byId(b.dataset.e))});
   el.querySelectorAll('[data-x]').forEach(b=>{b.onclick=()=>editarInv(byId(b.dataset.x))});
+}
+/* ---------- Servicios: artículos que no llevan inventario (corte, cambio de aceite, cambio de pantalla…) ---------- */
+async function svCargar(){
+  const r=await db.rpc('servicios_listar');if(!$('#sv'))return;
+  if(r.error){$('#sv').innerHTML='<h2>Servicios</h2><span class="mu">Aún no disponible: falta actualizar la base de datos (migración 22).</span>';return}
+  svData=r.data||[];usaServ=svData.some(x=>x.activo);
+  $('#sv').innerHTML=`<div class="row"><h2 class="sp" style="margin:0">Servicios</h2><button class="s" id="sn">+ Servicio</button></div>
+    <p class="mu">Se cobran sin inventario (no descuentan stock ni entran a compras). Puedes ponerles comisión para quien los hace.</p>
+    ${svData.length?svData.map(x=>`<div class="line"><span class="sp"${x.activo?'':' style="opacity:.55"'}>${esc(x.nombre)}${x.activo?'':' · <b class="er">desactivado</b>'}<div class="mu">${cop(x.precio)} · comisión ${x.comision_pct==null?'la de cada persona':Number(x.comision_pct)+' %'}</div></span><button class="g s" data-sx="${x.id_producto}">Editar</button></div>`).join(''):'<span class="mu">Aún no tienes servicios. Crea el primero, por ejemplo “Corte de cabello”.</span>'}`;
+  $('#sn').onclick=()=>svForm(null);
+  $('#sv').querySelectorAll('[data-sx]').forEach(b=>b.onclick=()=>svForm(svData.find(x=>x.id_producto==b.dataset.sx)));
+}
+function svForm(x){
+  const m=modal(`<h2>${x?'Editar servicio':'Servicio nuevo'}</h2>
+    <label>Nombre<input id="sn1" placeholder="Ej: Corte de cabello" value="${esc(x?x.nombre:'')}"></label>
+    <label>Precio<input id="sp1" type="number" inputmode="decimal" min="0" value="${x?Number(x.precio):''}"></label>
+    <label>Comisión de este servicio (%) <span class="mu">— vacío = usa la de cada persona</span><input id="sc1" type="number" inputmode="decimal" min="0" max="100" step="0.5" value="${x&&x.comision_pct!=null?Number(x.comision_pct):''}"></label>
+    ${x?`<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="sa1" ${x.activo?'checked':''}> Disponible para vender</label>`:''}
+    <div class="row"><button class="g sp" id="mc">Cancelar</button><button class="sp" id="mo">${x?'Guardar':'Crear'}</button></div>`);
+  $('#mc').onclick=()=>m.remove();
+  $('#mo').onclick=async()=>{const c=$('#sc1').value.trim()===''?null:Number($('#sc1').value);
+    const a=x?await call('servicio_editar',{p_id_producto:x.id_producto,p_nombre:$('#sn1').value,p_precio:Number($('#sp1').value),p_comision_pct:c,p_activo:$('#sa1').checked})
+             :await call('crear_servicio',{p_nombre:$('#sn1').value,p_precio:Number($('#sp1').value),p_iva:0,p_comision_pct:c});
+    if(a.data){m.remove();toast(x?'Servicio actualizado':'Servicio creado');await refresh();if(tab==='inv')svCargar()}};
 }
 async function tras(r){ // recarga la lista tras un cambio
   if(r.data){await loadInv();if(tab==='inv')invList()}

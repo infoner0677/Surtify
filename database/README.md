@@ -172,3 +172,13 @@ for f in tests/00_shim_supabase_local.sql 01_esquema.sql 02_funciones_y_triggers
 - Tendero (permiso `fiados`): `pagos_avisados_listar()` y `pago_aviso_resolver(id, confirmar, monto, nota)`. Confirmar usa `registrar_abono` (a su nombre y en su caja abierta); rechazar exige un motivo que el cliente ve en su cuenta. Todo queda en `equipo_eventos`.
 - `app.cuenta_cliente` devuelve además los últimos 5 `avisos` con su estado.
 - Pruebas: `tests/98_pruebas_pagos_avisados.sql`.
+
+
+## 22 · Servicios sin inventario y comisiones por persona
+- Para barberías, salones, talleres y reparación de celulares: `productos.maneja_inventario = false` marca un **servicio**. No tiene filas en `inventarios_sucursal`, así que no sale en inventario, alertas, compras ni autoservicio, y los triggers de venta/devolución no tocan stock. Los productos actuales siguen igual (`true`).
+- Comisión: `empleados.comision_pct` (base de la persona) y, opcional, `productos.comision_pct` (reemplaza la de la persona). `registrar_venta` acepta `id_empleado` en cada ítem (quién atendió); calcula y guarda en `detalles_pedido` el porcentaje y el valor de la comisión en ese momento, así que cambiar el porcentaje después no reescribe lo ya vendido. Sin persona no hay comisión.
+- Funciones: `crear_servicio`, `servicio_editar`, `servicios_listar`, `producto_comision` (permiso `inventario`); `equipo_comision` (solo administrador, queda en el registro de eventos); `equipo_atiende` (permiso `vender`, para elegir quién atiende); `reporte_comisiones(desde, hasta, id_empleado)`: el administrador ve a todos, cada persona solo lo suyo; la comisión se reduce en proporción a lo devuelto (notas crédito).
+- `v_productos_pos` trae `maneja_inventario`; `equipo_listar` trae `comision_pct`.
+- App: Productos → tarjeta **Servicios**; Vender → selector **¿Quién atiende?** (solo aparece si la tienda tiene servicios); Equipo → botón **Comisión**; Ventas → pestaña **Comisiones** (WhatsApp y CSV).
+- Por hacer: marcar comisiones como pagadas (cierre de quincena) y comisión sobre productos con persona asignada desde la pantalla.
+- Pruebas: `tests/99_pruebas_servicios_comisiones.sql`.
